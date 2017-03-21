@@ -7,12 +7,17 @@ from threading import Thread
 from Queue import Queue
 from re import compile, sub
 from sys import stderr, stdout
-from fuzzywuzzy import process
 from itertools import takewhile
 import argparse
 from json import dump, load
 from zipfile import ZipFile
 from tempfile import gettempdir
+import warnings
+from distutils.version import LooseVersion
+
+warnings.filterwarnings("ignore")
+
+from fuzzywuzzy import process
 
 RootPackURL = "http://www.keil.com/pack/index.idx"
 
@@ -26,7 +31,8 @@ def strip_protocol(url) :
     return protocol_matcher.sub("", str(url))
 
 def largest_version(content) :
-    return sorted([t['version'] for t in content.package.releases('release')], reverse=True)[0]
+    return sorted([t['version'] for t in content.package.releases('release')],
+                  reverse=True, key=lambda v: LooseVersion(v))[0]
 
 def do_queue(Class, function, interable) :
     q = Queue()
@@ -241,18 +247,23 @@ class Cache () :
         self.counter += 1
         self.display_counter("Scanning for Aliases")
 
-    def get_flash_algorthim_binary(self, device_name) :
+    def get_flash_algorthim_binary(self, device_name, all=False) :
         """Retrieve the flash algorithm file for a particular part.
 
         Assumes that both the PDSC and the PACK file associated with that part are in the cache.
 
         :param device_name: The exact name of a device
+        :param all: Return an iterator of all flash algos for this device
         :type device_name: str
         :return: A file-like object that, when read, is the ELF file that describes the flashing algorithm
-        :rtype: ZipExtFile
+        :return: A file-like object that, when read, is the ELF file that describes the flashing algorithm.
+                 When "all" is set to True then an iterator for file-like objects is returned
+        :rtype: ZipExtFile or ZipExtFile iterator if all is True
         """
-        pack = self.pack_from_cache(self.index[device_name])
-        return pack.open(device['algorithm']['file'])
+        device = self.index[device_name]
+        pack = self.pack_from_cache(device)
+        algo_itr = (pack.open(path) for path in device['algorithm'].keys())
+        return algo_itr if all else algo_itr.next()
 
     def get_svd_file(self, device_name) :
         """Retrieve the flash algorithm file for a particular part.
@@ -264,7 +275,8 @@ class Cache () :
         :return: A file-like object that, when read, is the ELF file that describes the flashing algorithm
         :rtype: ZipExtFile
         """
-        pack = self.pack_from_cache(self.index[device_name])
+        device = self.index[device_name]
+        pack = self.pack_from_cache(device)
         return pack.open(device['debug'])
 
     def generate_index(self) :
@@ -345,7 +357,7 @@ class Cache () :
 
         """
         if not self._aliases :
-            with open(join(self.data_path, "aliases.json")) as i :
+            with open(LocalPackAliases) as i :
                 self._aliases = load(i)
         return self._aliases
 
@@ -407,7 +419,7 @@ class Cache () :
         with open(dest, "r") as fd :
             return BeautifulSoup(fd, "html.parser")
 
-    def pack_from_cache(self, url) :
+    def pack_from_cache(self, device) :
         """Low level inteface for extracting a PACK file from the cache.
 
         Assumes that the file specified is a PACK file and is in the cache.

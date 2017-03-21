@@ -24,7 +24,7 @@
 #include "netsocket/NetworkStack.h"
 #include "rtos/Mutex.h"
 #include "Callback.h"
-#include "toolchain.h"
+#include "mbed_toolchain.h"
 
 
 /** Abstract socket class
@@ -120,28 +120,34 @@ public:
      */
     void set_timeout(int timeout);
 
-    /*  Set stack-specific socket options
+    /*  Set socket options
      *
-     *  The setsockopt allow an application to pass stack-specific hints
-     *  to the underlying stack. For unsupported options,
-     *  NSAPI_ERROR_UNSUPPORTED is returned and the socket is unmodified.
+     *  setsockopt allows an application to pass stack-specific options
+     *  to the underlying stack using stack-specific level and option names,
+     *  or to request generic options using levels from nsapi_socket_level_t.
      *
-     *  @param level    Stack-specific protocol level
-     *  @param optname  Stack-specific option identifier
+     *  For unsupported options, NSAPI_ERROR_UNSUPPORTED is returned
+     *  and the socket is unmodified.
+     *
+     *  @param level    Stack-specific protocol level or nsapi_socket_level_t
+     *  @param optname  Level-specific option name
      *  @param optval   Option value
      *  @param optlen   Length of the option value
      *  @return         0 on success, negative error code on failure
      */    
     nsapi_error_t setsockopt(int level, int optname, const void *optval, unsigned optlen);
 
-    /*  Get stack-specific socket options
+    /*  Get socket options
      *
-     *  The getstackopt allow an application to retrieve stack-specific hints
-     *  from the underlying stack. For unsupported options,
-     *  NSAPI_ERROR_UNSUPPORTED is returned and optval is unmodified.
+     *  getsockopt allows an application to retrieve stack-specific options
+     *  from the underlying stack using stack-specific level and option names,
+     *  or to request generic options using levels from nsapi_socket_level_t.
      *
-     *  @param level    Stack-specific protocol level
-     *  @param optname  Stack-specific option identifier
+     *  For unsupported options, NSAPI_ERROR_UNSUPPORTED is returned
+     *  and the socket is unmodified.
+     *
+     *  @param level    Stack-specific protocol level or nsapi_socket_level_t
+     *  @param optname  Level-specific option name
      *  @param optval   Destination for option value
      *  @param optlen   Length of the option value
      *  @return         0 on success, negative error code on failure
@@ -157,22 +163,30 @@ public:
      *  The callback may be called in an interrupt context and should not
      *  perform expensive operations such as recv/send calls.
      *
+     *  Note! This is not intended as a replacement for a poll or attach-like
+     *  asynchronous api, but rather as a building block for constructing
+     *  such functionality. The exact timing of when the registered function
+     *  is called is not guaranteed and susceptible to change.
+     *
      *  @param func     Function to call on state change
      */
+    void sigio(mbed::Callback<void()> func);
+
+    /** Register a callback on state change of the socket
+     *
+     *  @see Socket::sigio
+     *  @deprecated
+     *      The behaviour of Socket::attach differs from other attach functions in
+     *      mbed OS and has been known to cause confusion. Replaced by Socket::sigio.
+     */
+    MBED_DEPRECATED_SINCE("mbed-os-5.4",
+        "The behaviour of Socket::attach differs from other attach functions in "
+        "mbed OS and has been known to cause confusion. Replaced by Socket::sigio.")
     void attach(mbed::Callback<void()> func);
 
     /** Register a callback on state change of the socket
      *
-     *  The specified callback will be called on state changes such as when
-     *  the socket can recv/send/accept successfully and on when an error
-     *  occurs. The callback may also be called spuriously without reason.
-     *
-     *  The callback may be called in an interrupt context and should not
-     *  perform expensive operations such as recv/send calls.
-     *
-     *  @param obj      Pointer to object to call method on
-     *  @param method   Method to call on state change
-     *
+     *  @see Socket::sigio
      *  @deprecated
      *      The attach function does not support cv-qualifiers. Replaced by
      *      attach(callback(obj, method)).

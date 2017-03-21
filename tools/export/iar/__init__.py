@@ -25,16 +25,19 @@ class IAR(Exporter):
     with open(def_loc, 'r') as f:
         IAR_DEFS = json.load(f)
 
-    #supported targets have a device name and corresponding definition in
-    #iar_definitions.json
-    TARGETS = [target for target, obj in TARGET_MAP.iteritems()
-               if hasattr(obj, 'device_name') and
-               obj.device_name in IAR_DEFS.keys() and "IAR" in obj.supported_toolchains]
+    def _iar_support(tgt, iar_targets):
+        if "IAR" not in tgt.supported_toolchains:
+            return False
+        if hasattr(tgt, 'device_name') and tgt.device_name in iar_targets:
+            return True
+        if tgt.name in iar_targets:
+            return True
+        return False
 
-    SPECIAL_TEMPLATES = {
-        'rz_a1h'  : 'iar/iar_rz_a1h.ewp.tmpl',
-        'nucleo_f746zg' : 'iar/iar_nucleo_f746zg.ewp.tmpl'
-    }
+    #supported targets have a name or device_name which maps to a definition
+    #in iar_definitions.json
+    TARGETS = [target for target, obj in TARGET_MAP.iteritems() if
+               _iar_support(obj, IAR_DEFS.keys())]
 
     def iar_groups(self, grouped_src):
         """Return a namedtuple of group info
@@ -61,14 +64,20 @@ class IAR(Exporter):
 
     def iar_device(self):
         """Retrieve info from iar_definitions.json"""
-        device_name =  TARGET_MAP[self.target].device_name
+        tgt = TARGET_MAP[self.target]
+        device_name = (tgt.device_name if hasattr(tgt, "device_name") else
+                       tgt.name)
         device_info = self.IAR_DEFS[device_name]
         iar_defaults ={
             "OGChipSelectEditMenu": "",
             "CoreVariant": '',
             "GFPUCoreSlave": '',
             "GFPUCoreSlave2": 40,
-            "GBECoreSlave": 35
+            "GBECoreSlave": 35,
+            "GBECoreSlave2": '',
+            "FPU2": 0,
+            "NrRegs": 0,
+            "NEON": '',
         }
 
         iar_defaults.update(device_info)
@@ -86,25 +95,21 @@ class IAR(Exporter):
             grouped[group] = [self.format_file(src) for src in files]
         return grouped
 
-    def get_ewp_template(self):
-        return self.SPECIAL_TEMPLATES.get(self.target.lower(), 'iar/ewp.tmpl')
-
     def generate(self):
         """Generate the .eww, .ewd, and .ewp files"""
         srcs = self.resources.headers + self.resources.s_sources + \
                self.resources.c_sources + self.resources.cpp_sources + \
                self.resources.objects + self.resources.libraries
         flags = self.flags
-        flags['c_flags'] = list(set(flags['common_flags']
+        c_flags = list(set(flags['common_flags']
                                     + flags['c_flags']
                                     + flags['cxx_flags']))
-        if '--vla' in flags['c_flags']:
-            flags['c_flags'].remove('--vla')
-        if '--no_static_destruction' in flags['c_flags']:
-            flags['c_flags'].remove('--no_static_destruction')
-        #Optimizations
-        if '-Oh' in flags['c_flags']:
-            flags['c_flags'].remove('-Oh')
+        # Flags set in template to be set by user in IDE
+        template = ["--vla", "--no_static_destruction"]
+        # Flag invalid if set in template
+        # Optimizations are also set in template
+        invalid_flag = lambda x: x in template or re.match("-O(\d|time|n)", x)
+        flags['c_flags'] = [flag for flag in c_flags if not invalid_flag(flag)]
 
         try:
             debugger = DeviceCMSIS(self.target).debug.replace('-','').upper()
@@ -122,9 +127,9 @@ class IAR(Exporter):
         }
         ctx.update(flags)
 
-        self.gen_file('iar/eww.tmpl', ctx, self.project_name+".eww")
+        self.gen_file('iar/eww.tmpl', ctx, self.project_name + ".eww")
         self.gen_file('iar/ewd.tmpl', ctx, self.project_name + ".ewd")
-        self.gen_file(self.get_ewp_template(), ctx, self.project_name + ".ewp")
+        self.gen_file('iar/ewp.tmpl', ctx, self.project_name + ".ewp")
 
     @staticmethod
     def build(project_name, log_name="build_log.txt", cleanup=True):

@@ -15,31 +15,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tools.export import codered, ds5_5, iar, makefile
-from tools.export import emblocks, coide, kds, simplicityv3, atmelstudio
+from tools.export import lpcxpresso, ds5_5, iar, makefile
+from tools.export import embitz, coide, kds, simplicity, atmelstudio
 from tools.export import sw4stm32, e2studio, zip, cmsis, uvision, cdt
+from tools.export import gnuarmeclipse
 from tools.targets import TARGET_NAMES
 
 EXPORTERS = {
     'uvision5': uvision.Uvision,
     'uvision': uvision.Uvision,
-    'lpcxpresso': codered.CodeRed,
+    'lpcxpresso': lpcxpresso.LPCXpresso,
     'gcc_arm': makefile.GccArm,
     'make_gcc_arm': makefile.GccArm,
     'make_armc5': makefile.Armc5,
     'make_iar': makefile.IAR,
     'ds5_5': ds5_5.DS5_5,
     'iar': iar.IAR,
-    'emblocks' : emblocks.IntermediateFile,
+    'embitz' : embitz.EmBitz,
     'coide' : coide.CoIDE,
     'kds' : kds.KDS,
-    'simplicityv3' : simplicityv3.SimplicityV3,
+    'simplicityv3' : simplicity.SimplicityV3,
     'atmelstudio' : atmelstudio.AtmelStudio,
     'sw4stm32'    : sw4stm32.Sw4STM32,
     'e2studio' : e2studio.E2Studio,
     'eclipse_gcc_arm'  : cdt.EclipseGcc,
     'eclipse_iar'      : cdt.EclipseIAR,
     'eclipse_armc5'    : cdt.EclipseArmc5,
+    'gnuarmeclipse': gnuarmeclipse.GNUARMEclipse,
     'zip' : zip.ZIP,
     'cmsis'    : cmsis.CMSIS
 }

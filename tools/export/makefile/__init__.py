@@ -21,7 +21,7 @@ import sys
 from subprocess import check_output, CalledProcessError, Popen, PIPE
 import shutil
 from jinja2.exceptions import TemplateNotFound
-from tools.export.exporters import Exporter
+from tools.export.exporters import Exporter, filter_supported
 from tools.utils import NotSupportedException
 from tools.targets import TARGET_MAP
 
@@ -35,11 +35,19 @@ class Makefile(Exporter):
 
     MBED_CONFIG_HEADER_SUPPORTED = True
 
+    POST_BINARY_WHITELIST = set([
+        "MCU_NRF51Code.binary_hook",
+        "TEENSY3_1Code.binary_hook"
+    ])
+
     def generate(self):
         """Generate the makefile
 
         Note: subclasses should not need to override this method
         """
+        if not self.resources.linker_script:
+            raise NotSupportedException("No linker script found.")
+
         self.resources.win_to_unix()
 
         to_be_compiled = [splitext(src)[0] + ".o" for src in
@@ -49,6 +57,8 @@ class Makefile(Exporter):
 
         libraries = [self.prepare_lib(basename(lib)) for lib
                      in self.resources.libraries]
+        sys_libs = [self.prepare_sys_lib(lib) for lib
+                    in self.toolchain.sys_libs]
 
         ctx = {
             'name': self.project_name,
@@ -58,6 +68,7 @@ class Makefile(Exporter):
             'library_paths': self.resources.lib_dirs,
             'linker_script': self.resources.linker_script,
             'libraries': libraries,
+            'ld_sys_libs': sys_libs,
             'hex_files': self.resources.hex_files,
             'vpath': (["../../.."]
                       if (basename(dirname(dirname(self.export_dir)))
@@ -72,14 +83,20 @@ class Makefile(Exporter):
             'asm_cmd': " ".join(["\'" + part + "\'" for part
                                 in ([basename(self.toolchain.asm[0])] +
                                     self.toolchain.asm[1:])]),
-            'ld_cmd': " ".join(["\'" + part + "\'" for part
-                                in ([basename(self.toolchain.ld[0])] +
-                                    self.toolchain.ld[1:])]),
+            'ld_cmd': "\'" + basename(self.toolchain.ld[0]) + "\'",
             'elf2bin_cmd': "\'" + basename(self.toolchain.elf2bin) + "\'",
             'link_script_ext': self.toolchain.LINKER_EXT,
             'link_script_option': self.LINK_SCRIPT_OPTION,
             'user_library_flag': self.USER_LIBRARY_FLAG,
         }
+
+        if hasattr(self.toolchain, "preproc"):
+            ctx['pp_cmd'] = " ".join(["\'" + part + "\'" for part
+                                      in ([basename(self.toolchain.preproc[0])] +
+                                          self.toolchain.preproc[1:] + 
+                                          self.toolchain.ld[1:])])
+        else:
+            ctx['pp_cmd'] = None
 
         for key in ['include_paths', 'library_paths', 'linker_script',
                     'hex_files']:
@@ -156,8 +173,7 @@ class Makefile(Exporter):
 
 class GccArm(Makefile):
     """GCC ARM specific makefile target"""
-    TARGETS = [target for target, obj in TARGET_MAP.iteritems()
-               if "GCC_ARM" in obj.supported_toolchains]
+    TARGETS = filter_supported("GCC_ARM", Makefile.POST_BINARY_WHITELIST)
     NAME = 'Make-GCC-ARM'
     TEMPLATE = 'make-gcc-arm'
     TOOLCHAIN = "GCC_ARM"
@@ -168,11 +184,14 @@ class GccArm(Makefile):
     def prepare_lib(libname):
         return "-l:" + libname
 
+    @staticmethod
+    def prepare_sys_lib(libname):
+        return "-l" + libname
+
 
 class Armc5(Makefile):
     """ARM Compiler 5 specific makefile target"""
-    TARGETS = [target for target, obj in TARGET_MAP.iteritems()
-               if "ARM" in obj.supported_toolchains]
+    TARGETS = filter_supported("ARM", Makefile.POST_BINARY_WHITELIST)
     NAME = 'Make-ARMc5'
     TEMPLATE = 'make-armc5'
     TOOLCHAIN = "ARM"
@@ -183,11 +202,14 @@ class Armc5(Makefile):
     def prepare_lib(libname):
         return libname
 
+    @staticmethod
+    def prepare_sys_lib(libname):
+        return libname
+
 
 class IAR(Makefile):
     """IAR specific makefile target"""
-    TARGETS = [target for target, obj in TARGET_MAP.iteritems()
-               if "IAR" in obj.supported_toolchains]
+    TARGETS = filter_supported("IAR", Makefile.POST_BINARY_WHITELIST)
     NAME = 'Make-IAR'
     TEMPLATE = 'make-iar'
     TOOLCHAIN = "IAR"
@@ -196,6 +218,12 @@ class IAR(Makefile):
 
     @staticmethod
     def prepare_lib(libname):
+        if "lib" == libname[:3]:
+            libname = libname[3:]
+        return "-l" + splitext(libname)[0]
+
+    @staticmethod
+    def prepare_sys_lib(libname):
         if "lib" == libname[:3]:
             libname = libname[3:]
         return "-l" + splitext(libname)[0]

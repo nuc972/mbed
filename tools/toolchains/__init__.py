@@ -256,7 +256,8 @@ class mbedToolchain:
 
     profile_template = {'common':[], 'c':[], 'cxx':[], 'asm':[], 'ld':[]}
 
-    def __init__(self, target, notify=None, macros=None, silent=False, extra_verbose=False, build_profile=None):
+    def __init__(self, target, notify=None, macros=None, silent=False,
+                 extra_verbose=False, build_profile=None, build_dir=None):
         self.target = target
         self.name = self.__class__.__name__
 
@@ -265,6 +266,9 @@ class mbedToolchain:
 
         # Toolchain flags
         self.flags = deepcopy(build_profile or self.profile_template)
+
+        # System libraries provided by the toolchain
+        self.sys_libs = []
 
         # User-defined macros
         self.macros = macros or []
@@ -292,11 +296,8 @@ class mbedToolchain:
         self.build_all = False
 
         # Build output dir
-        self.build_dir = None
+        self.build_dir = build_dir
         self.timestamp = time()
-
-        # Output build naming based on target+toolchain combo (mbed 2.0 builds)
-        self.obj_path = join("TARGET_"+target.name, "TOOLCHAIN_"+self.name)
 
         # Number of concurrent build jobs. 0 means auto (based on host system cores)
         self.jobs = 0
@@ -507,10 +508,25 @@ class mbedToolchain:
         return False
 
     def is_ignored(self, file_path):
+        """Check if file path is ignored by any .mbedignore thus far"""
         for pattern in self.ignore_patterns:
             if fnmatch.fnmatch(file_path, pattern):
                 return True
         return False
+
+    def add_ignore_patterns(self, root, base_path, patterns):
+        """Add a series of patterns to the ignored paths
+
+        Positional arguments:
+        root - the directory containing the ignore file
+        base_path - the location that the scan started from
+        patterns - the list of patterns we will ignore in the future
+        """
+        real_base = relpath(root, base_path)
+        if real_base == ".":
+            self.ignore_patterns.extend(patterns)
+        else:
+            self.ignore_patterns.extend(join(real_base, pat) for pat in patterns)
 
     # Create a Resources object from the path pointed to by *path* by either traversing a
     # a directory structure, when *path* is a directory, or adding *path* to the resources,
@@ -559,10 +575,12 @@ class mbedToolchain:
                     lines = [l for l in lines if l != ""] # Strip empty lines
                     lines = [l for l in lines if not re.match("^#",l)] # Strip comment lines
                     # Append root path to glob patterns and append patterns to ignore_patterns
-                    self.ignore_patterns.extend([join(root,line.strip()) for line in lines])
+                    self.add_ignore_patterns(root, base_path, lines)
 
             # Skip the whole folder if ignored, e.g. .mbedignore containing '*'
-            if self.is_ignored(join(root,"")):
+            if (self.is_ignored(join(relpath(root, base_path),"")) or
+                self.build_dir == join(relpath(root, base_path))):
+                dirs[:] = []
                 continue
 
             for d in copy(dirs):
@@ -577,7 +595,7 @@ class mbedToolchain:
                     # Ignore toolchain that do not match the current TOOLCHAIN
                     (d.startswith('TOOLCHAIN_') and d[10:] not in labels['TOOLCHAIN']) or
                     # Ignore .mbedignore files
-                    self.is_ignored(join(dir_path,"")) or
+                    self.is_ignored(join(relpath(root, base_path), d,"")) or
                     # Ignore TESTS dir
                     (d == 'TESTS')):
                         dirs.remove(d)
@@ -606,7 +624,7 @@ class mbedToolchain:
     def _add_file(self, file_path, resources, base_path, exclude_paths=None):
         resources.file_basepath[file_path] = base_path
 
-        if self.is_ignored(file_path):
+        if self.is_ignored(relpath(file_path, base_path)):
             return
 
         _, ext = splitext(file_path)
@@ -754,7 +772,7 @@ class mbedToolchain:
 
     # THIS METHOD IS BEING CALLED BY THE MBED ONLINE BUILD SYSTEM
     # ANY CHANGE OF PARAMETERS OR RETURN VALUES WILL BREAK COMPATIBILITY
-    def compile_sources(self, resources, build_path, inc_dirs=None):
+    def compile_sources(self, resources, inc_dirs=None):
         # Web IDE progress bar for project build
         files_to_compile = resources.s_sources + resources.c_sources + resources.cpp_sources
         self.to_be_compiled = len(files_to_compile)
@@ -771,8 +789,6 @@ class mbedToolchain:
         inc_paths = sorted(set(inc_paths))
         # Unique id of all include paths
         self.inc_md5 = md5(' '.join(inc_paths)).hexdigest()
-        # Where to store response files
-        self.build_dir = build_path
 
         objects = []
         queue = []
@@ -785,7 +801,8 @@ class mbedToolchain:
         # Sort compile queue for consistency
         files_to_compile.sort()
         for source in files_to_compile:
-            object = self.relative_object_path(build_path, resources.file_basepath[source], source)
+            object = self.relative_object_path(
+                self.build_dir, resources.file_basepath[source], source)
 
             # Queue mode (multiprocessing)
             commands = self.compile_command(source, object, inc_paths)
@@ -1326,31 +1343,74 @@ class mbedToolchain:
         """
         raise NotImplemented
 
+    @staticmethod
+    @abstractmethod
+    def name_mangle(name):
+        """Mangle a name based on the conventional name mangling of this toolchain
+
+        Positional arguments:
+        name -- the name to mangle
+
+        Return:
+        the mangled name as a string
+        """
+        raise NotImplemented
+
+    @staticmethod
+    @abstractmethod
+    def make_ld_define(name, value):
+        """Create an argument to the linker that would define a symbol
+
+        Positional arguments:
+        name -- the symbol to define
+        value -- the value to give the symbol
+
+        Return:
+        The linker flag as a string
+        """
+        raise NotImplemented
+
+    @staticmethod
+    @abstractmethod
+    def redirect_symbol(source, sync, build_dir):
+        """Redirect a symbol at link time to point at somewhere else
+
+        Positional arguments:
+        source -- the symbol doing the pointing
+        sync -- the symbol being pointed to
+        build_dir -- the directory to put "response files" if needed by the toolchain
+
+        Side Effects:
+        Possibly create a file in the build directory
+
+        Return:
+        The linker flag to redirect the symbol, as a string
+        """
+        raise NotImplemented
+
     # Return the list of macros geenrated by the build system
     def get_config_macros(self):
         return Config.config_to_macros(self.config_data) if self.config_data else []
 
 from tools.settings import ARM_PATH
-from tools.settings import GCC_ARM_PATH, GCC_CR_PATH
+from tools.settings import GCC_ARM_PATH
 from tools.settings import IAR_PATH
 
 TOOLCHAIN_PATHS = {
     'ARM': ARM_PATH,
     'uARM': ARM_PATH,
     'GCC_ARM': GCC_ARM_PATH,
-    'GCC_CR': GCC_CR_PATH,
     'IAR': IAR_PATH
 }
 
 from tools.toolchains.arm import ARM_STD, ARM_MICRO
-from tools.toolchains.gcc import GCC_ARM, GCC_CR
+from tools.toolchains.gcc import GCC_ARM
 from tools.toolchains.iar import IAR
 
 TOOLCHAIN_CLASSES = {
     'ARM': ARM_STD,
     'uARM': ARM_MICRO,
     'GCC_ARM': GCC_ARM,
-    'GCC_CR': GCC_CR,
     'IAR': IAR
 }
 

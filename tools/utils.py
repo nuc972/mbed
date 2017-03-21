@@ -28,6 +28,7 @@ from math import ceil
 import json
 from collections import OrderedDict
 import logging
+from intelhex import IntelHex
 
 def remove_if_in(lst, thing):
     if thing in lst:
@@ -488,6 +489,13 @@ def argparse_dir_not_parent(other):
             return not_parent
     return parse_type
 
+def argparse_deprecate(replacement_message):
+    """fail if argument is provided with deprecation warning"""
+    def parse_type(_):
+        """The parser type"""
+        raise argparse.ArgumentTypeError("Deprecated." + replacement_message)
+    return parse_type
+
 def print_large_string(large_string):
     """ Breaks a string up into smaller pieces before print them
 
@@ -507,3 +515,16 @@ def print_large_string(large_string):
         else:
             end_index = ((string_part + 1) * string_limit) - 1
             print large_string[start_index:end_index],
+
+def intelhex_offset(filename, offset):
+    """Load a hex or bin file at a particular offset"""
+    _, inteltype = splitext(filename)
+    ih = IntelHex()
+    if inteltype == ".bin":
+        ih.loadbin(filename, offset=offset)
+    elif inteltype == ".hex":
+        ih.loadhex(filename)
+    else:
+        raise ToolException("File %s does not have a known binary file type"
+                            % filename)
+    return ih

@@ -30,7 +30,7 @@
 
 #if DEVICE_ANALOGIN
 
-#include "wait_api.h"
+#include "mbed_wait_api.h"
 #include "cmsis.h"
 #include "pinmap.h"
 #include "mbed_error.h"
@@ -105,6 +105,7 @@ static inline uint16_t adc_read(analogin_t *obj)
     AdcHandle.Instance = (ADC_TypeDef *)(obj->adc);
 
     // Configure ADC channel
+    sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
     switch (obj->channel) {
         case 0:
             sConfig.Channel = ADC_CHANNEL_0;

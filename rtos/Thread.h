@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include "cmsis_os.h"
 #include "platform/Callback.h"
-#include "platform/toolchain.h"
+#include "platform/mbed_toolchain.h"
 #include "rtos/Semaphore.h"
 #include "rtos/Mutex.h"
 
@@ -48,14 +48,14 @@ namespace rtos {
  *  void blink(DigitalOut *led) {
  *      while (running) {
  *          *led = !*led;
- *          Thread::wait(1000);
+ *          wait(1);
  *      }
  *  }
  *
  *  // Spawns a thread to run blink for 5 seconds
  *  int main() {
- *      thread.start(led1, blink);
- *      Thread::wait(5000);
+ *      thread.start(callback(blink, &led1));
+ *      wait(5);
  *      running = false;
  *      thread.join();
  *  }
@@ -197,6 +197,7 @@ public:
     /** Starts a thread executing the specified function.
       @param   task           function to be executed by this thread.
       @return  status code that indicates the execution status of the function.
+      @note a thread can only be started once
     */
     osStatus start(mbed::Callback<void()> task);
 
@@ -251,7 +252,7 @@ public:
 
     /** State of the Thread */
     enum State {
-        Inactive,           /**< Not created or terminated */
+        Inactive,           /**< Not created */
         Ready,              /**< Ready to run */
         Running,            /**< Running */
         WaitingDelay,       /**< Waiting for a delay to occur */
@@ -330,6 +331,10 @@ public:
     virtual ~Thread();
 
 private:
+    /* disallow copy constructor and assignment operators */
+    Thread(const Thread&);
+    Thread& operator=(const Thread&);
+
     // Required to share definitions without
     // delegated constructors
     void constructor(osPriority priority=osPriorityNormal,
@@ -344,9 +349,10 @@ private:
     mbed::Callback<void()> _task;
     osThreadId _tid;
     osThreadDef_t _thread_def;
-    bool _dynamic_stack;
     Semaphore _join_sem;
     Mutex _mutex;
+    bool _dynamic_stack;
+    bool _finished;
 };
 
 }

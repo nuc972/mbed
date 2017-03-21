@@ -1,9 +1,12 @@
 {
-    "stm32l476vg": {
+    "STM32L476VG": {
         "OGChipSelectEditMenu": "STM32L476VG\tST STM32L476VG"
     },
     "LPC11U24FBD48/401": {
         "OGChipSelectEditMenu": "LPC11U24FBD64_401\tNXP LPC11U24FBD64_401"
+    },
+    "STM32F207ZG": {
+         "OGChipSelectEditMenu": "STM32F207ZG\tST STM32F207ZG"
     },
     "STM32F334R8": {
         "OGChipSelectEditMenu": "STM32F334x8\tST STM32F334x8"
@@ -17,7 +20,7 @@
     "STM32F042K6": {
         "OGChipSelectEditMenu": "STM32F042x6\tST STM32F042x6"
     },
-    "stm32l476rg": {
+    "STM32L476RG": {
         "OGChipSelectEditMenu": "STM32L476RG\tST STM32L476RG"
     },
     "STM32L011K4": {
@@ -71,11 +74,12 @@
     "STM32L073RZ": {
         "OGChipSelectEditMenu": "STM32L073RZ\tST STM32L073RZ"
     },
-    "stm32ff746zg": {
+    "STM32F746ZG": {
         "OGChipSelectEditMenu": "STM32F746ZG\tST STM32F746ZG",
+        "GBECoreSlave": 41,
         "CoreVariant": 41,
-        "GFPUCoreSlave2": 41,
-        "GBECoreSlave": 41
+        "FPU2": 6,
+        "NrRegs": 1
     },
     "MKL43Z256xxx4": {
         "OGChipSelectEditMenu": "MKL43Z256xxx4\tFreescale MKL43Z256xxx4"
@@ -83,8 +87,12 @@
     "LPC812M101JDH20": {
         "OGChipSelectEditMenu": "LPC812M101\tNXP LPC812M101"
     },
-    "stm32f746ng": {
-        "OGChipSelectEditMenu": "STM32F746NG\tST STM32F746NG"
+    "STM32F746NG": {
+        "OGChipSelectEditMenu": "STM32F746NG\tST STM32F746NG",
+        "GBECoreSlave": 41,
+        "CoreVariant": 41,
+        "FPU2": 6,
+        "NrRegs": 1
     },
     "STM32F411RE": {
         "OGChipSelectEditMenu": "STM32F411RE\tST STM32F411RE"
@@ -128,8 +136,15 @@
     "STM32F091RC": {
         "OGChipSelectEditMenu": "STM32F091RC\tST STM32F091RC"
     },
-    "r7s721001": {
+    "RZ_A1H": {
         "OGChipSelectEditMenu": "R7S721001\tRenesas R7S721001",
+        "CoreVariant": 37,
+        "GFPUCoreSlave": 37,
+        "GBECoreSlave": 37,
+        "NEON":1
+    },
+    "VK_RZ_A1H": {
+        "OGChipSelectEditMenu": "R7S721000\tRenesas R7S721000",
         "CoreVariant": 37,
         "GFPUCoreSlave": 37,
         "GBECoreSlave": 37,
@@ -141,7 +156,7 @@
     "STM32F031K6": {
         "OGChipSelectEditMenu": "STM32F031x6\tST STM32F031x6"
     },
-    "max326000x85": {
+    "MAX32600MBED": {
         "OGChipSelectEditMenu": "MAX32600x85\tMaxim MAX32600x85"
     },
     "STM32F407VG": {
@@ -152,5 +167,11 @@
     },
     "NCS36510":{
         "OGChipSelectEditMenu": "NCS36510\tONSemiconductor NCS36510"
+    },
+    "NUC472HI8AE": {
+        "OGChipSelectEditMenu": "NUC400AE series\tNuvoton NUC400AE series (NUC442AE,NUC472AE)"
+    },
+    "M453VG6AE": {
+        "OGChipSelectEditMenu": "M451AE series\tNuvoton M451AE series (M451AE,M452AE,M453AE,M451MAE)"
     }
 }

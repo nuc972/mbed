@@ -15,7 +15,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import re
-from os.path import join, dirname, splitext, basename
+from os.path import join, dirname, splitext, basename, exists
+from os import makedirs, write
+from tempfile import mkstemp
 
 from tools.toolchains import mbedToolchain, TOOLCHAIN_PATHS
 from tools.hooks import hook_tool
@@ -26,7 +28,7 @@ class ARM(mbedToolchain):
     LIBRARY_EXT = '.ar'
 
     STD_LIB_NAME = "%s.ar"
-    DIAGNOSTIC_PATTERN  = re.compile('"(?P<file>[^"]+)", line (?P<line>\d+)( \(column (?P<column>\d+)\)|): (?P<severity>Warning|Error): (?P<message>.+)')
+    DIAGNOSTIC_PATTERN  = re.compile('"(?P<file>[^"]+)", line (?P<line>\d+)( \(column (?P<column>\d+)\)|): (?P<severity>Warning|Error|Fatal error): (?P<message>.+)')
     INDEX_PATTERN  = re.compile('(?P<col>\s*)\^')
     DEP_PATTERN = re.compile('\S+:\s(?P<file>.+)\n')
 
@@ -38,8 +40,10 @@ class ARM(mbedToolchain):
         return mbedToolchain.generic_check_executable("ARM", 'armcc', 2, 'bin')
 
     def __init__(self, target, notify=None, macros=None,
-                 silent=False, extra_verbose=False, build_profile=None):
+                 silent=False, extra_verbose=False, build_profile=None,
+                 build_dir=None):
         mbedToolchain.__init__(self, target, notify, macros, silent,
+                               build_dir=build_dir,
                                extra_verbose=extra_verbose,
                                build_profile=build_profile)
 
@@ -61,12 +65,11 @@ class ARM(mbedToolchain):
 
         self.flags['common'] += ["--cpu=%s" % cpu]
 
-        self.asm = [main_cc] + self.flags['common'] + self.flags['asm'] + ["-I \""+ARM_INC+"\""]
-        self.cc = [main_cc] + self.flags['common'] + self.flags['c'] + ["-I \""+ARM_INC+"\""]
-        self.cppc = [main_cc] + self.flags['common'] + self.flags['c'] + self.flags['cxx'] + ["-I \""+ARM_INC+"\""]
+        self.asm = [main_cc] + self.flags['common'] + self.flags['asm']
+        self.cc = [main_cc] + self.flags['common'] + self.flags['c']
+        self.cppc = [main_cc] + self.flags['common'] + self.flags['c'] + self.flags['cxx']
 
         self.ld = [join(ARM_BIN, "armlink")]
-        self.sys_libs = []
 
         self.ar = join(ARM_BIN, "armar")
         self.elf2bin = join(ARM_BIN, "fromelf")
@@ -180,6 +183,8 @@ class ARM(mbedToolchain):
         else:
             args = ["-o", output, "--info=totals", "--map", "--list=%s" % map_file]
 
+        args.extend(self.flags['ld'])
+
         if mem_map:
             args.extend(["--scatter", mem_map])
 
@@ -221,24 +226,26 @@ class ARM(mbedToolchain):
         self.cc_verbose("FromELF: %s" % ' '.join(cmd))
         self.default_cmd(cmd)
 
+    @staticmethod
+    def name_mangle(name):
+        return "_Z%i%sv" % (len(name), name)
+
+    @staticmethod
+    def make_ld_define(name, value):
+        return "--predefine=\"-D%s=0x%x\"" % (name, value)
+
+    @staticmethod
+    def redirect_symbol(source, sync, build_dir):
+        if not exists(build_dir):
+            makedirs(build_dir)
+        handle, filename = mkstemp(prefix=".redirect-symbol.", dir=build_dir)
+        write(handle, "RESOLVE %s AS %s\n" % (source, sync))
+        return "--edit=%s" % filename
+
 
 class ARM_STD(ARM):
-    def __init__(self, target, notify=None, macros=None,
-                 silent=False, extra_verbose=False, build_profile=None):
-        ARM.__init__(self, target, notify, macros, silent,
-                     extra_verbose=extra_verbose, build_profile=build_profile)
-
-        # Run-time values
-        self.ld.extend(["--libpath", join(TOOLCHAIN_PATHS['ARM'], "lib")])
+    pass
 
 
 class ARM_MICRO(ARM):
     PATCHED_LIBRARY = False
-
-    def __init__(self, target, notify=None, macros=None,
-                 silent=False, extra_verbose=False, build_profile=None):
-        ARM.__init__(self, target, notify, macros, silent,
-                     extra_verbose=extra_verbose, build_profile=build_profile)
-
-        # Run-time values
-        self.ld.extend(["--libpath", join(TOOLCHAIN_PATHS['ARM'], "lib")])

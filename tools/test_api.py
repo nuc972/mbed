@@ -2013,7 +2013,7 @@ def find_tests(base_dir, target_name, toolchain_name, app_config=None):
     tests = {}
 
     # Prepare the toolchain
-    toolchain = prepare_toolchain([base_dir], target_name, toolchain_name,
+    toolchain = prepare_toolchain([base_dir], None, target_name, toolchain_name,
                                   silent=True, app_config=app_config)
 
     # Scan the directory for paths to probe for 'TESTS' folders
@@ -2133,7 +2133,7 @@ def build_tests(tests, base_source_paths, build_path, target, toolchain_name,
     base_path = norm_relative_path(build_path, execution_directory)
 
     target_name = target if isinstance(target, str) else target.name
-    cfg, macros, features = get_config(base_source_paths, target_name, toolchain_name)
+    cfg, _, _ = get_config(base_source_paths, target_name, toolchain_name)
 
     baud_rate = 9600
     if 'platform.stdio-baud-rate' in cfg:
@@ -2201,12 +2201,16 @@ def build_tests(tests, base_source_paths, build_path, target, toolchain_name,
                             report[target_name][toolchain_name][test_key] = report_entry[test_key]
                         
                         # Set the overall result to a failure if a build failure occurred
-                        if not worker_result['result'] and not isinstance(worker_result['reason'], NotSupportedException):
+                        if ('reason' in worker_result and
+                            not worker_result['reason'] and
+                            not isinstance(worker_result['reason'], NotSupportedException)):
                             result = False
                             break
 
                         # Adding binary path to test build result
-                        if worker_result['result'] and 'bin_file' in worker_result:
+                        if ('result' in worker_result and
+                            worker_result['result'] and
+                            'bin_file' in worker_result):
                             bin_file = norm_relative_path(worker_result['bin_file'], execution_directory)
 
                             test_build['tests'][worker_result['kwargs']['project_id']] = {

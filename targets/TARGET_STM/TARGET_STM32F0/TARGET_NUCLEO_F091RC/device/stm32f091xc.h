@@ -2,8 +2,8 @@
   ******************************************************************************
   * @file    stm32f091xc.h
   * @author  MCD Application Team
-  * @version V2.3.0
-  * @date    27-May-2016
+  * @version V2.3.1
+  * @date    04-November-2016
   * @brief   CMSIS Cortex-M0 Device Peripheral Access Layer Header File. 
   *          This file contains all the peripheral register's definitions, bits 
   *          definitions and memory mapping for STM32F0xx devices.            
@@ -11384,7 +11384,7 @@ typedef struct
 #define IS_ADC_COMMON_INSTANCE(INSTANCE) ((INSTANCE) == ADC)
 
 /******************************* CAN Instances ********************************/
-#define IS_CAN_ALL_INSTANCE(INSTANCE) ((INSTANCE) == CAN)
+#define IS_CAN_ALL_INSTANCE(INSTANCE) ((INSTANCE) == CAN1)
 
 /****************************** COMP Instances *********************************/
 #define IS_COMP_ALL_INSTANCE(INSTANCE) (((INSTANCE) == COMP1) || \

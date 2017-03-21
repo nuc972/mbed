@@ -55,7 +55,7 @@ PROJECT := {{name}}
 {% endfor %}
 LIBRARY_PATHS :={% for p in library_paths %} {{user_library_flag}}{{p}} {% endfor %}
 LIBRARIES :={% for lib in libraries %} {{lib}} {% endfor %}
-LINKER_SCRIPT := {{linker_script}}
+LINKER_SCRIPT ?= {{linker_script}}
 {%- block additional_variables -%}{% endblock %}
 
 # Objects and Paths
@@ -67,6 +67,9 @@ CC      = {{cc_cmd}}
 CPP     = {{cppc_cmd}}
 LD      = {{ld_cmd}}
 ELF2BIN = {{elf2bin_cmd}}
+{% if pp_cmd -%}
+PREPROC = {{pp_cmd}}
+{%- endif %}
 {% if hex_files %}
 SREC_CAT = srec_cat
 {%- endif %}
@@ -80,7 +83,7 @@ SREC_CAT = srec_cat
 {% endfor %}
 
 LD_FLAGS :={%- block ld_flags -%} {{ld_flags|join(" ")}} {% endblock %}
-{% block sys_libs -%}{%- endblock %}
+LD_SYS_LIBS :={%- block sys_libs -%} {{ld_sys_libs|join(" ")}} {% endblock %}
 
 # Tools and Flags
 ###############################################################################
@@ -119,15 +122,20 @@ all: $(PROJECT).bin $(PROJECT).hex size
 	+@echo "Compile: $(notdir $<)"
 	@$(CPP) $(CXX_FLAGS) $(INCLUDE_PATHS) -o $@ $<
 
+{% if pp_cmd %}
+$(PROJECT).link_script{{link_script_ext}}: $(LINKER_SCRIPT)
+	@$(PREPROC) $< -o $@
+{% endif %}
+
 {% block target_project_elf %}
-$(PROJECT).elf: $(OBJECTS) $(SYS_OBJECTS) $(LINKER_SCRIPT)
+$(PROJECT).elf: $(OBJECTS) $(SYS_OBJECTS) {% if pp_cmd -%} $(PROJECT).link_script{{link_script_ext}} {% else%} $(LINKER_SCRIPT) {% endif %}
 	+@echo "link: $(notdir $@)"
 	@$(LD) $(LD_FLAGS) {{link_script_option}} $(filter %{{link_script_ext}}, $^) $(LIBRARY_PATHS) --output $@ $(filter %.o, $^) $(LIBRARIES) $(LD_SYS_LIBS)
 {% endblock %}
 
 $(PROJECT).bin: $(PROJECT).elf
 {%- block elf2bin -%}{%- endblock %}
-{% if not hex_files %}	+@echo ===== bin file ready to flash: $(OBJDIR)/$@ ===== {% endif %}
+{% if not hex_files %}	+@echo "===== bin file ready to flash: $(OBJDIR)/$@ =====" {% endif %}
 
 $(PROJECT).hex: $(PROJECT).elf
 {%- block elf2hex -%}{%- endblock %}
@@ -136,7 +144,7 @@ $(PROJECT).hex: $(PROJECT).elf
 $(PROJECT)-combined.hex: $(PROJECT).hex
 	+@echo "NOTE: the $(SREC_CAT) binary is required to be present in your PATH. Please see http://srecord.sourceforge.net/ for more information."
 	$(SREC_CAT) {% for f in hex_files %}{{f}} {% endfor %} -intel $(PROJECT).hex -intel -o $(PROJECT)-combined.hex -intel --line-length=44
-	+@echo ===== hex file ready to flash: $(OBJDIR)/$@ =====
+	+@echo "===== hex file ready to flash: $(OBJDIR)/$@ ====="
 {% endif %}
 # Rules
 ###############################################################################

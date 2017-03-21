@@ -104,41 +104,39 @@ def zip_export(file_name, prefix, resources, project_files, inc_repos):
     with zipfile.ZipFile(file_name, "w") as zip_file:
         for prj_file in project_files:
             zip_file.write(prj_file, join(prefix, basename(prj_file)))
-        for loc, resource in resources.iteritems():
-            for res in [resource] + resource.features.values():
-                to_zip = (
-                    res.headers + res.s_sources + res.c_sources +\
-                    res.cpp_sources + res.libraries + res.hex_files + \
-                    [res.linker_script] + res.bin_files + res.objects + \
-                    res.json_files + res.lib_refs + res.lib_builds)
-                if inc_repos:
-                    for directory in res.repo_dirs:
-                        for root, _, files in walk(directory):
-                            for repo_file in files:
-                                source = join(root, repo_file)
-                                to_zip.append(source)
-                                res.file_basepath[source] = res.base_path
-                    to_zip += res.repo_files
-                for source in to_zip:
-                    if source:
-                        zip_file.write(
-                            source,
-                            join(prefix, loc,
-                                 relpath(source, res.file_basepath[source])))
-                for source in res.lib_builds:
-                    target_dir, _ = splitext(source)
-                    dest = join(prefix, loc,
-                                relpath(target_dir, res.file_basepath[source]),
-                                ".bld", "bldrc")
-                    zip_file.write(source, dest)
+        for loc, res in resources.iteritems():
+            to_zip = (
+                res.headers + res.s_sources + res.c_sources +\
+                res.cpp_sources + res.libraries + res.hex_files + \
+                [res.linker_script] + res.bin_files + res.objects + \
+                res.json_files + res.lib_refs + res.lib_builds)
+            if inc_repos:
+                for directory in res.repo_dirs:
+                    for root, _, files in walk(directory):
+                        for repo_file in files:
+                            source = join(root, repo_file)
+                            to_zip.append(source)
+                            res.file_basepath[source] = res.base_path
+                to_zip += res.repo_files
+            for source in to_zip:
+                if source:
+                    zip_file.write(
+                        source,
+                        join(prefix, loc,
+                             relpath(source, res.file_basepath[source])))
+            for source in res.lib_builds:
+                target_dir, _ = splitext(source)
+                dest = join(prefix, loc,
+                            relpath(target_dir, res.file_basepath[source]),
+                            ".bld", "bldrc")
+                zip_file.write(source, dest)
 
 
 
-def export_project(src_paths, export_path, target, ide,
-                   libraries_paths=None, linker_script=None, clean=False,
-                   notify=None, verbose=False, name=None, inc_dirs=None,
-                   jobs=1, silent=False, extra_verbose=False, config=None,
-                   macros=None, zip_proj=None, inc_repos=False,
+def export_project(src_paths, export_path, target, ide, libraries_paths=None,
+                   linker_script=None, notify=None, verbose=False, name=None,
+                   inc_dirs=None, jobs=1, silent=False, extra_verbose=False,
+                   config=None, macros=None, zip_proj=None, inc_repos=False,
                    build_profile=None):
     """Generates a project file and creates a zip archive if specified
 
@@ -151,7 +149,6 @@ def export_project(src_paths, export_path, target, ide,
     Keyword Arguments:
     libraries_paths - paths to additional libraries
     linker_script - path to the linker script for the specified target
-    clean - removes the export_path if it exists
     notify - function is passed all events, and expected to handle notification
       of the user, emit the events to a log, etc.
     verbose - assigns the notify function to toolchains print_notify_verbose
@@ -183,19 +180,16 @@ def export_project(src_paths, export_path, target, ide,
         src_paths = {"": paths}
 
     # Export Directory
-    if exists(export_path) and clean:
-        rmtree(export_path)
     if not exists(export_path):
         makedirs(export_path)
 
     _, toolchain_name = get_exporter_toolchain(ide)
 
     # Pass all params to the unified prepare_resources()
-    toolchain = prepare_toolchain(paths, target, toolchain_name,
-                                  macros=macros, clean=clean, jobs=jobs,
-                                  notify=notify, silent=silent, verbose=verbose,
-                                  extra_verbose=extra_verbose, config=config,
-                                  build_profile=build_profile)
+    toolchain = prepare_toolchain(
+        paths, export_path, target, toolchain_name, macros=macros, jobs=jobs,
+        notify=notify, silent=silent, verbose=verbose,
+        extra_verbose=extra_verbose, config=config, build_profile=build_profile)
     # The first path will give the name to the library
     if name is None:
         name = basename(normpath(abspath(src_paths[0])))
@@ -228,8 +222,13 @@ def export_project(src_paths, export_path, target, ide,
                                              macros=macros)
     files.append(config_header)
     if zip_proj:
+        for resource in resource_dict.values():
+            for label, res in resource.features.iteritems():
+                if label not in toolchain.target.features:
+                    resource.add(res)
         if isinstance(zip_proj, basestring):
-            zip_export(join(export_path, zip_proj), name, resource_dict, files, inc_repos)
+            zip_export(join(export_path, zip_proj), name, resource_dict, files,
+                       inc_repos)
         else:
             zip_export(zip_proj, name, resource_dict, files, inc_repos)
 
