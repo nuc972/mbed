@@ -44,6 +44,8 @@ static const int thr_test_num_threads = 3;
 
 #ifdef TARGET_NRF52
 static const int thr_test_stack_size = 1024;
+#elif defined(__CORTEX_M23) || defined(__CORTEX_M33)
+static const int thr_test_stack_size = 1280;
 #else
 static const int thr_test_stack_size = 768;
 #endif
