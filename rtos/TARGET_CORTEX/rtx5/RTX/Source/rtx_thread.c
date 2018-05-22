@@ -609,7 +609,12 @@ osThreadId_t svcRtxThreadNew (osThreadFunc_t func, void *argument, const osThrea
     stack_size = attr->stack_size;
     priority   = attr->priority;
 #if (DOMAIN_NS == 1)
+#if TARGET_NUMAKER_PFM_M2351
+    // Force tz_module to 1 for Nuvoton's TARGET_NUMAKE_PFM_M2351 target
+    tz_module = 1;
+#else
     tz_module  = attr->tz_module;
+#endif
 #endif
     if (thread != NULL) {
       //lint -e(923) -e(9078) "cast from pointer to unsigned int" [MISRA Note 7]
