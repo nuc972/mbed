@@ -83,6 +83,38 @@ void _platform_post_stackheap_init(void)
     mbed_sdk_init();
 }
 
+/* Fix __user_setup_stackheap and ARM_LIB_STACK/ARM_LIB_HEAP cannot co-exist in RTOS-less build
+ *
+ * According AN241 (http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dai0241b/index.html),
+ * __rt_entry has the following call sequence:
+ * 1. _platform_pre_stackheap_init
+ * 2. __user_setup_stackheap or setup the Stack Pointer (SP) by another method
+ * 3. _platform_post_stackheap_init
+ * 4. __rt_lib_init
+ * 5. _platform_post_lib_init
+ * 6. main()
+ * 7. exit()
+ *
+ * Per our check, when __user_setup_stackheap and ARM_LIB_STACK/ARM_LIB_HEAP co-exist, neither
+ * does __user_setup_stackheap get called and nor is ARM_LIB_HEAP used to get heap base/limit,
+ * which are required to pass to __rt_lib_init later. To fix the issue, by subclass'ing
+ * __rt_lib_init, heap base/limit are replaced with Image$$ARM_LIB_HEAP$$ZI$$Base/Limit if
+ * ARM_LIB_HEAP region is defined in scatter file.
+ */
+#include <rt_misc.h>
+extern __value_in_regs struct __argc_argv $Super$$__rt_lib_init(unsigned heapbase, unsigned heaptop);
+extern MBED_WEAK char Image$$ARM_LIB_HEAP$$ZI$$Base[];
+extern MBED_WEAK char Image$$ARM_LIB_HEAP$$ZI$$Limit[];
+
+__value_in_regs struct __argc_argv $Sub$$__rt_lib_init (unsigned heapbase, unsigned heaptop)
+{
+    if (Image$$ARM_LIB_HEAP$$ZI$$Limit) {
+        return $Super$$__rt_lib_init((unsigned) Image$$ARM_LIB_HEAP$$ZI$$Base, (unsigned) Image$$ARM_LIB_HEAP$$ZI$$Limit);
+    } else {
+        return $Super$$__rt_lib_init(heapbase, heaptop);
+    }
+}
+
 #elif defined (__GNUC__) 
 
 extern int __real_main(void);
