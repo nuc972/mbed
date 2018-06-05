@@ -37,6 +37,8 @@ using utest::v1::Case;
 
 static const int test_timeout = 30;
 
+//TESTTEST
+#define printf(...)
 
 // Amount to malloc for each iteration
 #define MALLOC_TEST_SIZE            256

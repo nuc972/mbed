@@ -17,6 +17,9 @@
 #include "mbed.h"
 #include "greentea-client/test_env.h"
 
+//TESTTEST
+#define printf(...)
+
 class DevNull : public Stream {
 public:
     DevNull(const char *name = NULL) : Stream(name) {}

@@ -21,6 +21,9 @@
 #include "HeapBlockDevice.h"
 #include <stdlib.h>
 
+//TESTTEST
+#define printf(...)
+
 using namespace utest::v1;
 
 // TODO HACK, replace with available ram/heap property

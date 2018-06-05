@@ -30,6 +30,11 @@
 #define mbedtls_printf     printf
 #endif
 
+//TESTTEST
+#define printf(...)
+//TESTTEST
+#define mbedtls_printf(...)
+
 using namespace utest::v1;
 
 #if defined(MBEDTLS_SHA256_C)

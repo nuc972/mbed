@@ -17,6 +17,9 @@
 #include "mbed.h"
 #include "greentea-client/test_env.h"
 
+//TESTTEST
+#define printf(...)
+
 uint32_t test_64(uint64_t ticks) {
     ticks >>= 3; // divide by 8
     if (ticks > 0xFFFFFFFF) {

@@ -31,6 +31,9 @@
 #error [NOT_SUPPORTED] NVSTORE needs to be enabled for this test
 #endif
 
+//TESTTEST
+#define printf(...)
+
 using namespace utest::v1;
 
 static const uint16_t max_test_keys = 20;

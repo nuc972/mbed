@@ -17,6 +17,9 @@
 
 #define PATTERN_CHECK_VALUE  0xF0F0ADAD
 
+//TESTTEST
+#define printf(...)
+
 class Test {
 
 private:

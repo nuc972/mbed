@@ -15,6 +15,9 @@
  */
 #include "greentea-client/test_env.h"
 
+//TESTTEST
+#define printf(...)
+
 namespace {
     bool mbed_main_called = false;
 }

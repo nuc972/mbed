@@ -21,6 +21,9 @@
 #include "hal/us_ticker_api.h"
 #include "hal/lp_ticker_api.h"
 
+//TESTTEST
+#define printf(...)
+
 #if !DEVICE_USTICKER
 #error [NOT_SUPPORTED] test not supported
 #endif

@@ -22,6 +22,9 @@
 #include "unity/unity.h"
 #include "utest/utest.h"
 
+//TESTTEST
+#define printf(...)
+
 using namespace utest::v1;
 
 #define PATTERN_CHECK_VALUE  0xF0F0ADAD
