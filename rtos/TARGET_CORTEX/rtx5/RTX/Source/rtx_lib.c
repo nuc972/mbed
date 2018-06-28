@@ -619,22 +619,14 @@ __WEAK int _mutex_initialize(mutex *m) {
 }
 
 // Acquire mutex
-#if !defined(__ARMCC_VERSION) || __ARMCC_VERSION < 6010050
-__USED
-#endif
-void _mutex_acquire(mutex *m);
-__WEAK void _mutex_acquire(mutex *m) {
+__USED __WEAK void _mutex_acquire(mutex *m) {
   if (os_kernel_is_active()) {
     osMutexAcquire(*m, osWaitForever);
   }
 }
 
 // Release mutex
-#if !defined(__ARMCC_VERSION) || __ARMCC_VERSION < 6010050
-__USED
-#endif
-void _mutex_release(mutex *m);
-__WEAK void _mutex_release(mutex *m) {
+__USED __WEAK void _mutex_release(mutex *m) {
   if (os_kernel_is_active()) {
     osMutexRelease(*m);
   }
