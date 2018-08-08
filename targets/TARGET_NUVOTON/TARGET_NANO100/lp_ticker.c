@@ -78,8 +78,6 @@ void lp_ticker_init(void)
         /* By HAL spec, ticker_init allows the ticker to keep counting and disables the
          * ticker interrupt. */
         lp_ticker_disable_interrupt();
-        lp_ticker_clear_interrupt();
-        NVIC_ClearPendingIRQ(TIMER_MODINIT.irq_n);
         return;
     }
     ticker_inited = 1;
@@ -187,6 +185,10 @@ void lp_ticker_set_interrupt(timestamp_t timestamp)
 
     /* NOTE: Rely on LPTICKER_DELAY_TICKS to be non-blocking. */
     timer_base->CMPR = cmp_timer;
+
+    /* Clear any previously pending interrupts */
+    lp_ticker_clear_interrupt();
+    NVIC_ClearPendingIRQ(TIMER_MODINIT.irq_n);
 
     /* We can call ticker_irq_handler now. */
     NVIC_EnableIRQ(TIMER_MODINIT.irq_n);
