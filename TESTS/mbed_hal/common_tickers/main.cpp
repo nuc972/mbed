@@ -473,11 +473,14 @@ void ticker_speed_test(void)
 
     /* ---- Test fire_interrupt function. ---- */
     counter = NUM_OF_CALLS;
+    /* Disable ticker interrupt which would interfere with speed test */
+    core_util_critical_section_enter();
     start = us_ticker_read();
     while (counter--) {
         intf->fire_interrupt();
     }
     stop = us_ticker_read();
+    core_util_critical_section_exit();
 
     TEST_ASSERT(diff_us(start, stop, us_ticker_info) < (NUM_OF_CALLS * (MAX_FUNC_EXEC_TIME_US + DELTA_FUNC_EXEC_TIME_US)));
 
@@ -531,6 +534,19 @@ utest::v1::status_t us_ticker_teardown(const Case *const source, const size_t pa
 #endif
     osKernelResume(0);
 
+    /* Redeem from missing go-off ticker interrupt
+     *
+     * For testing us ticker HAL, we uninstall us ticker layer and then reinstall it back. This would cause ticker
+     * interrupt which goes off but doesn't get caught during the uninstall period. At the end of test, we manually
+     * fire one ticker interrupt for the us ticker layer to redeem from missing go-off ticker interrupt.
+     *
+     * With MBED_TICKLESS and LPTICKER_DELAY_TICKS enabled, lp_ticker_set_interrupt_wrapper, relying on us ticker
+     * layer, would arm an alarm to call lp_ticker_set_interrupt delayed. Due to missing go-off ticker interrupt,
+     * the armed alarm won't go off until another ticker interrupt goes off. Manually firing one ticker interrupt
+     * can alleviate the issue.
+     */
+    us_ticker_fire_interrupt();
+
     return greentea_case_teardown_handler(source, passed, failed, reason);
 }
 
@@ -563,13 +579,16 @@ utest::v1::status_t lp_ticker_teardown(const Case *const source, const size_t pa
     ticker_resume(get_lp_ticker_data());
     osKernelResume(0);
 
+    /* Redeem from missing go-off ticker interrupt (same as us ticker above) */
+    lp_ticker_fire_interrupt();
+
     return greentea_case_teardown_handler(source, passed, failed, reason);
 }
 #endif
 
 utest::v1::status_t test_setup(const size_t number_of_cases)
 {
-    GREENTEA_SETUP(30, "default_auto");
+    GREENTEA_SETUP(80, "default_auto");
     return verbose_test_setup_handler(number_of_cases);
 }
 
