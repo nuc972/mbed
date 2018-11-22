@@ -88,6 +88,58 @@ public:
      */
     virtual int disconnect();
 
+    /** Start the soft-AP interface
+     *
+     *  Attempts to configure soft-AP to a WiFi network. Requires ssid and passphrase to be set.
+     *  If passphrase is invalid, NSAPI_ERROR_AUTH_ERROR is returned.
+     *
+     *  @return         0 on success, negative error code on failure
+     */
+    virtual int start_ap();
+
+    /** Start the soft-AP interface
+     *
+     *  Attempts to configure soft-AP to a WiFi network.
+     *
+     *  @param ssid      Name of the network to connect to
+     *  @param pass      Security passphrase to connect to the network
+     *  @param security  Type of encryption for connection (Default: NSAPI_SECURITY_NONE)
+     *  @param channel   This parameter is not supported, setting it to anything else than 0 will result in NSAPI_ERROR_UNSUPPORTED
+     *  @return          0 on success, or error code on failure
+     */
+    virtual int start_ap(const char *ssid, const char *pass, nsapi_security_t security = NSAPI_SECURITY_WPA2,
+                                  uint8_t channel = 1);
+
+    /** Stop the soft-AP interface
+     *  @return             0 on success, negative on failure
+     */
+    virtual int stop_ap();
+
+    /** Creates a TCP server
+     *  @param port         Port number of TCP server
+     *  @return             0 on success, negative on failure
+     */
+    virtual int create_tcp_server(uint16_t port);
+
+    /** Deletes a TCP server
+     *  @return             0 on success, negative on failure
+     */
+    virtual int delete_tcp_server();
+
+    /** Send data to the remote host for server side
+     *  @param data         The buffer to send to the host
+     *  @param size         The length of the buffer to send
+     *  @return             Number of written bytes on success, negative on failure
+     */
+    virtual int server_send(const void *data, unsigned size);
+
+    /** Receive data from the remote host for server side
+     *  @param data         The buffer in which to store the data received from the host
+     *  @param size         The maximum length of the buffer
+     *  @return             Number of received bytes on success, negative on failure
+     */
+    virtual int server_recv(void *data, unsigned size);
+
     /** Get the internally stored IP address
      *  @return             IP address of the interface or null if not yet connected
      */

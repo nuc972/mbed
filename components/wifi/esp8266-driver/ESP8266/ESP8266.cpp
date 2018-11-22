@@ -43,6 +43,7 @@ ESP8266::ESP8266(PinName tx, PinName rx, bool debug)
     //https://www.espressif.com/sites/default/files/documentation/4a-esp8266_at_instruction_set_en.pdf
     //Also seems that ERROR is not sent, but FAIL instead
     _parser.oob("+CWJAP:", callback(this, &ESP8266::_connect_error_handler));
+    _parser.oob("+CWSAP:", callback(this, &ESP8266::_soft_ap_error_handler));
     _parser.oob("0,CLOSED", callback(this, &ESP8266::_oob_socket0_closed_handler));
     _parser.oob("1,CLOSED", callback(this, &ESP8266::_oob_socket1_closed_handler));
     _parser.oob("2,CLOSED", callback(this, &ESP8266::_oob_socket2_closed_handler));
@@ -166,12 +167,81 @@ bool ESP8266::disconnect(void)
     return done;
 }
 
-const char *ESP8266::getIPAddress(void)
+nsapi_error_t ESP8266::start_ap(const char *ap, const char *passPhrase, const nsapi_security_t security,
+                                const uint8_t channel)
 {
     _smutex.lock();
     setTimeout(ESP8266_CONNECT_TIMEOUT);
+    _connection_status = NSAPI_STATUS_CONNECTING;
+    if (_connection_status_cb)
+        _connection_status_cb(NSAPI_EVENT_CONNECTION_STATUS_CHANGE, _connection_status);
+
+    _parser.send("AT+CWSAP_CUR=\"%s\",\"%s\",%d,%d", ap, passPhrase, channel, security);
+    if (!_parser.recv("OK\n")) {
+        if (_fail) {
+            _smutex.unlock();
+            _fail = false;
+            return NSAPI_ERROR_DEVICE_ERROR;
+        }
+    }
+    setTimeout();
+    _smutex.unlock();
+
+    return NSAPI_ERROR_OK;
+}
+
+bool ESP8266::stop_ap(void)
+{
+    _smutex.lock();
+    setTimeout(ESP8266_CONNECT_TIMEOUT);
+    bool done = _parser.send("AT+CWMODE_CUR=%d", WIFIMODE_STATION)
+            && _parser.recv("OK\n");
+    setTimeout();
+    _smutex.unlock();
+
+    return done;
+}
+
+bool ESP8266::create_tcp_server(uint16_t port)
+{
+    bool done = false;
+
+    _smutex.lock();
+    done = _parser.send("AT+CIPSERVER=1,%d", port) && _parser.recv("OK\n");
+    _smutex.unlock();
+
+    return done;
+}
+
+bool ESP8266::delete_tcp_server()
+{
+    bool done = false;
+
+    _smutex.lock();
+    done = _parser.send("AT+CIPSERVER=0") && _parser.recv("OK\n");
+    _smutex.unlock();
+
+    return done;
+}
+
+int ESP8266::get_next_packet_id()
+{
+    static int id = -1;
+
+    if (_packets)
+        id = _packets->id;
+
+    return id;;
+}
+
+const char *ESP8266::getIPAddress(void)
+{
+    char mode[4];
+
+    _smutex.lock();
+    setTimeout(ESP8266_CONNECT_TIMEOUT);
     if (!(_parser.send("AT+CIFSR")
-        && _parser.recv("+CIFSR:STAIP,\"%15[^\"]\"", _ip_buffer)
+        && _parser.recv("+CIFSR:%3[^I]IP,\"%15[^\"]\"", mode, _ip_buffer)
         && _parser.recv("OK\n"))) {
         _smutex.unlock();
         return 0;
@@ -184,9 +254,11 @@ const char *ESP8266::getIPAddress(void)
 
 const char *ESP8266::getMACAddress(void)
 {
+    char mode[4];
+
     _smutex.lock();
     if (!(_parser.send("AT+CIFSR")
-        && _parser.recv("+CIFSR:STAMAC,\"%17[^\"]\"", _mac_buffer)
+        && _parser.recv("+CIFSR:%3[^M]MAC,\"%17[^\"]\"", mode, _mac_buffer)
         && _parser.recv("OK\n"))) {
         _smutex.unlock();
         return 0;
@@ -584,6 +656,16 @@ void ESP8266::_connect_error_handler()
     _connect_error = 0;
 
     if (_parser.recv("%d", &_connect_error) && _parser.recv("FAIL")) {
+        _fail = true;
+        _parser.abort();
+    }
+}
+
+void ESP8266::_soft_ap_error_handler()
+{
+    _fail = false;
+
+    if (_parser.recv("ERROR")) {
         _fail = true;
         _parser.abort();
     }

@@ -186,6 +186,95 @@ int ESP8266Interface::disconnect()
     return _esp.disconnect() ? NSAPI_ERROR_OK : NSAPI_ERROR_DEVICE_ERROR;
 }
 
+int ESP8266Interface::start_ap(const char *ssid, const char *pass, nsapi_security_t security,
+                                        uint8_t channel)
+{
+    if (channel < 1 || channel > 13 ) {
+        return NSAPI_ERROR_UNSUPPORTED;
+    }
+    ap_ch = channel;
+
+    int err = set_credentials(ssid, pass, security);
+    if (err) {
+        return err;
+    }
+
+    return start_ap();
+}
+
+int ESP8266Interface::start_ap()
+{
+    nsapi_error_t status;
+
+    if (strlen(ap_ssid) == 0) {
+        return NSAPI_ERROR_NO_SSID;
+    }
+
+    if (ap_sec != NSAPI_SECURITY_NONE) {
+        if (strlen(ap_pass) < ESP8266_PASSPHRASE_MIN_LENGTH) {
+            return NSAPI_ERROR_PARAMETER;
+        }
+    }
+
+    status = _init();
+    if (status != NSAPI_ERROR_OK) {
+        return status;
+    }
+
+    status = _startup(ESP8266::WIFIMODE_SOFTAP);
+    if (status != NSAPI_ERROR_OK) {
+        return status;
+    }
+    _started = true;
+
+    int connect_error = _esp.start_ap(ap_ssid, ap_pass, ap_sec, ap_ch);
+    if (connect_error) {
+        return connect_error;
+    }
+
+    if (!get_ip_address()) {
+        return NSAPI_ERROR_NO_ADDRESS;
+    }
+
+    return NSAPI_ERROR_OK;
+}
+
+int ESP8266Interface::stop_ap()
+{
+    _started = false;
+    _initialized = false;
+
+    return _esp.stop_ap() ? NSAPI_ERROR_OK : NSAPI_ERROR_DEVICE_ERROR;
+}
+
+int ESP8266Interface::create_tcp_server(uint16_t port)
+{
+    return _esp.create_tcp_server(port) ? NSAPI_ERROR_OK : NSAPI_ERROR_DEVICE_ERROR;
+}
+
+int ESP8266Interface::delete_tcp_server()
+{
+    return _esp.delete_tcp_server() ? NSAPI_ERROR_OK : NSAPI_ERROR_DEVICE_ERROR;
+}
+
+int ESP8266Interface::server_send(const void *data, unsigned size)
+{
+    nsapi_error_t status;
+
+    status = _esp.send(_esp.get_next_packet_id(), data, size);
+
+    return status != NSAPI_ERROR_OK ? status : size;
+}
+
+int ESP8266Interface::server_recv(void *data, unsigned size)
+{
+    int32_t recv;
+
+    recv = _esp.recv_tcp(_esp.get_next_packet_id(), data, size);
+
+    return recv;
+}
+
 const char *ESP8266Interface::get_ip_address()
 {
     if(!_started) {
@@ -273,9 +362,9 @@ nsapi_error_t ESP8266Interface::_init(void)
         if (!_get_firmware_ok()) {
             return NSAPI_ERROR_DEVICE_ERROR;
         }
-        if (_disable_default_softap() == false) {
-            return NSAPI_ERROR_DEVICE_ERROR;
-        }
+//        if (_disable_default_softap() == false) {
+//            return NSAPI_ERROR_DEVICE_ERROR;
+//        }
         _initialized = true;
     }
     return NSAPI_ERROR_OK;

@@ -91,6 +91,45 @@ public:
     bool disconnect(void);
 
     /**
+    * Start ESP8266 to be a soft-AP
+    *
+    * @param ap the name of the AP
+    * @param passPhrase the password of AP
+    * @return NSAPI_ERROR_OK only if ESP8266 is connected successfully
+    */
+    nsapi_error_t start_ap(const char *ap, const char *passPhrase, const nsapi_security_t security,
+                           const uint8_t channel);
+
+    /**
+    * Stop ESP8266 to be a soft-AP
+    *
+    * @return true only if ESP8266 is disconnected successfully
+    */
+    bool stop_ap(void);
+
+    /**
+    * Creates a TCP server
+    *
+    * @param port port number of TCP server
+    * @return true only if server created successfully
+    */
+    bool create_tcp_server(uint16_t port);
+
+    /**
+    * Deletes a TCP server
+    *
+    * @return true only if server deleted successfully
+    */
+    bool delete_tcp_server();
+
+    /**
+    * Get the ID of next packet
+    *
+    * @return ID number or -1 if no packet
+    */
+    int get_next_packet_id();
+
+    /**
     * Get the IP address of ESP8266
     *
     * @return null-teriminated IP address or null if no IP address is assigned
@@ -283,6 +322,7 @@ private:
     } *_packets, **_packets_end;
     void _packet_handler();
     void _connect_error_handler();
+    void _soft_ap_error_handler();
     bool recv_ap(nsapi_wifi_ap_t *ap);
     void _oob_socket0_closed_handler();
     void _oob_socket1_closed_handler();
