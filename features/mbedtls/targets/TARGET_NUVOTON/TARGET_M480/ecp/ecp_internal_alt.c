@@ -251,7 +251,6 @@ int mbedtls_internal_ecp_init( const mbedtls_ecp_group *grp )
      * narrow open period to just real ECC accelerator operation in internal_run_eccop()/
      * internal_run_modop().
      */
-     
     return 0;
 }
 
@@ -487,9 +486,8 @@ cleanup:
  */
 NU_STATIC void internal_open_ecc_ac(void)
 {
-    /* TODO: Change busy-wait with other means to release CPU */
     /* Acquire ownership of ECC accelerator */
-    while (! crypto_ecc_acquire());
+    crypto_ecc_acquire(true);
     
     /* Initialize crypto module */
     crypto_init();

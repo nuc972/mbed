@@ -19,23 +19,67 @@
 #include "mbed_assert.h"
 #include "mbed_critical.h"
 #include "mbed_error.h"
+#include "cmsis_os2.h"
+#include "mbed_rtos_storage.h"
+#include <string.h>
 #include <limits.h>
 #include "nu_modutil.h"
 #include "nu_bitutil.h"
 #include "crypto-misc.h"
 
-/* Track if AES H/W is available */
-static uint16_t crypto_aes_avail = 1;
-/* Track if DES H/W is available */
-static uint16_t crypto_des_avail = 1;
-/* Track if SHA H/W is available */
-static uint16_t crypto_sha_avail = 1;
+/* Consideration for choosing proper synchronization mechanism
+ *
+ * 1. Except for SHA AC which doesn't support context save & restore, we lock all crypto AC
+ *    for just their real operation rather than the whole lifetime of their crypto context.
+ *    For SHA AC, we provide SHA S/W fallback when SHA AC is not available. This policy can
+ *    avoid deadlock.
+ * 2. SHA context can be init'ed in one thread and free'ed in another thread. We cannot
+ *    choose mutex for locking SHA AC for the whole lifetime of SHA context because mutex
+ *    requires lock/unlock in the same thread.
+ * 3. Busy-wait loop would bite CPU.
+ * 4. Finally, we choose semaphore to synchronize access to crypto AC. Known drawback of this
+ *    choice is priority inversion.
+ */
+
+/* Synchronization object init status */
+#define SYNCOBJ_INITSTATUS_UNINIT       0   // Un-initialized
+#define SYNCOBJ_INITSTATUS_INITING      1   // Initializing
+#define SYNCOBJ_INITSTATUS_INITED       2   // Initialized
+
+/* Wrapper of CMSIS-RTOS2 semaphore */
+typedef struct _crypto_submod_sem {
+    volatile uint16_t               init_status;
+    const char *                    name;
+    osSemaphoreId_t                 id;
+    mbed_rtos_storage_semaphore_t   cb_mem;
+} crypto_submod_sem;
+
+/* Semaphore for crypto AES AC management */
+static crypto_submod_sem crypto_aes_sem = {
+    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
+    .name               = "nu_aes_ac_sem",
+    .id                 = NULL
+};
+
+/* Semaphore for crypto DES AC management */
+static crypto_submod_sem crypto_des_sem = {
+    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
+    .name               = "nu_des_ac_sem",
+    .id                 = NULL
+};
+
+/* Semaphore for crypto SHA AC management */
+static crypto_submod_sem crypto_sha_sem = {
+    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
+    .name               = "nu_sha_ac_sem",
+    .id                 = NULL
+};
 
 /* Crypto (AES, DES, SHA, etc.) init counter. Crypto's keeps active as it is non-zero. */
 static uint16_t crypto_init_counter = 0U;
 
-static bool crypto_submodule_acquire(uint16_t *submodule_avail);
-static void crypto_submodule_release(uint16_t *submodule_avail);
+static bool crypto_submodule_acquire(crypto_submod_sem *crypto_submod_sem, bool blocking);
+static void crypto_submodule_release(crypto_submod_sem *crypto_submod_sem);
 
 /* Crypto done flags */
 #define CRYPTO_DONE_OK              BIT0    /* Done with OK */
@@ -106,34 +150,34 @@ void crypto_zeroize(void *v, size_t n)
     }
 }
 
-bool crypto_aes_acquire(void)
+bool crypto_aes_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_aes_avail);
+    return crypto_submodule_acquire(&crypto_aes_sem, blocking);
 }
 
 void crypto_aes_release(void)
 {
-    crypto_submodule_release(&crypto_aes_avail);
+    crypto_submodule_release(&crypto_aes_sem);
 }
 
-bool crypto_des_acquire(void)
+bool crypto_des_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_des_avail);
+    return crypto_submodule_acquire(&crypto_des_sem, blocking);
 }
 
 void crypto_des_release(void)
 {
-    crypto_submodule_release(&crypto_des_avail);
+    crypto_submodule_release(&crypto_des_sem);
 }
 
-bool crypto_sha_acquire(void)
+bool crypto_sha_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_sha_avail);
+    return crypto_submodule_acquire(&crypto_sha_sem, blocking);
 }
 
 void crypto_sha_release(void)
 {
-    crypto_submodule_release(&crypto_sha_avail);
+    crypto_submodule_release(&crypto_sha_sem);
 }
 
 void crypto_prng_prestart(void)
@@ -207,16 +251,74 @@ bool crypto_dma_buffs_overlap(const void *in_buff, size_t in_buff_size, const vo
     return overlap;
 }
 
-static bool crypto_submodule_acquire(uint16_t *submodule_avail)
+static bool crypto_submodule_acquire(crypto_submod_sem *crypto_submod_sem, bool blocking)
 {
-    uint16_t expectedCurrentValue = 1;
-    return core_util_atomic_cas_u16(submodule_avail, &expectedCurrentValue, 0);
+    MBED_ASSERT(crypto_submod_sem);
+
+    /* Initialize semaphore only once and atomically */
+    uint16_t expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
+    while (1) {
+        /* Try to initialize semaphore if it has not initialized yet */
+        if (core_util_atomic_cas_u16(&crypto_submod_sem->init_status,
+                                     &expectedCurrentValue,
+                                     SYNCOBJ_INITSTATUS_INITING)) {
+            /* Semaphore hasn't initialized yet. Initialize it. */
+            MBED_ASSERT(crypto_submod_sem->id == NULL);
+            memset(&crypto_submod_sem->cb_mem, 0, sizeof(crypto_submod_sem->cb_mem));
+            osSemaphoreAttr_t attr = { 0 };
+            attr.name = crypto_submod_sem->name;
+            attr.cb_mem = &crypto_submod_sem->cb_mem;
+            attr.cb_size = sizeof(crypto_submod_sem->cb_mem);
+            crypto_submod_sem->id = osSemaphoreNew(1, 1, &attr);
+            MBED_ASSERT(crypto_submod_sem->id);
+
+            /* Semaphore has initialized. Announce it. */
+            crypto_submod_sem->init_status = SYNCOBJ_INITSTATUS_INITED;
+
+            break;
+        } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITING) {
+            /* Semaphore is initializing by another thread. Wait for it. */
+            while (crypto_submod_sem->init_status != SYNCOBJ_INITSTATUS_INITED);
+            break;
+        } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITED) {
+            /* Semaphore has initialized. */
+            break;
+        }
+
+        /* Re-try initializing semaphore */
+        expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
+    }
+
+    MBED_ASSERT(crypto_submod_sem->id);
+
+    uint32_t millisec = blocking ? osWaitForever : 0;
+    osStatus_t status = osSemaphoreAcquire(crypto_submod_sem->id, millisec);
+    if (status == osOK) {
+        return true;
+    }
+
+    /* Check fatal error */
+    bool nofatal = (status == osErrorResource && millisec == 0) ||
+                   (status == osErrorTimeout && millisec != osWaitForever);
+    if (!nofatal) {
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_SEMAPHORE_LOCK_FAILED), "Semaphore lock failed", status);
+    }
+
+    return false;
 }
 
-static void crypto_submodule_release(uint16_t *submodule_avail)
+static void crypto_submodule_release(crypto_submod_sem *crypto_submod_sem)
 {
-    uint16_t expectedCurrentValue = 0;
-    while (! core_util_atomic_cas_u16(submodule_avail, &expectedCurrentValue, 1));
+    MBED_ASSERT(crypto_submod_sem);
+    MBED_ASSERT(crypto_submod_sem->id);
+
+    osStatus_t status = osSemaphoreRelease(crypto_submod_sem->id);
+    if (status != osOK) {
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_SEMAPHORE_UNLOCK_FAILED), "Semaphore unlock failed", status);
+    }
+
+    /* To avoid frequent semaphore allocate/free (osSemaphoreNew()/osSemaphoreDelete()),
+     * we just allocate semaphore once and never free it. */
 }
 
 static void crypto_submodule_prestart(volatile uint16_t *submodule_done)
