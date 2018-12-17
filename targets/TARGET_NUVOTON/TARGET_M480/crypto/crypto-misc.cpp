@@ -139,9 +139,9 @@ void crypto_zeroize32(uint32_t *v, size_t n)
     }
 }
 
-bool crypto_aes_acquire(bool blocking)
+bool crypto_aes_acquire(void)
 {
-    return crypto_aes_mutex->trylock_for(blocking ? osWaitForever : 0);
+    return crypto_aes_mutex->lock() == osOK;
 }
 
 void crypto_aes_release(void)
@@ -149,9 +149,9 @@ void crypto_aes_release(void)
     crypto_aes_mutex->unlock();
 }
 
-bool crypto_des_acquire(bool blocking)
+bool crypto_des_acquire(void)
 {
-    return crypto_des_mutex->trylock_for(blocking ? osWaitForever : 0);
+    return crypto_des_mutex->lock() == osOK;
 }
 
 void crypto_des_release(void)
@@ -159,14 +159,9 @@ void crypto_des_release(void)
     crypto_des_mutex->unlock();
 }
 
-bool crypto_sha_acquire(bool blocking)
+bool crypto_sha_acquire(void)
 {
-    if (blocking) {
-        while (core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag));
-        return true;
-    } else {
-        return !core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag);
-    }
+    return !core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag);
 }
 
 void crypto_sha_release(void)
@@ -174,9 +169,9 @@ void crypto_sha_release(void)
     core_util_atomic_flag_clear(&crypto_sha_atomic_flag);
 }
 
-bool crypto_ecc_acquire(bool blocking)
+bool crypto_ecc_acquire(void)
 {
-    return crypto_ecc_mutex->trylock_for(blocking ? osWaitForever : 0);
+    return crypto_ecc_mutex->lock() == osOK;
 }
 
 void crypto_ecc_release(void)

@@ -33,9 +33,6 @@ void crypto_zeroize(void *v, size_t n);
 
 /* Acquire/release ownership of crypto sub-module
  * 
- * \param blocking  false for non-blocking
- *                  true for blocking
- * 
  * \return          false if crytpo sub-module is held by another thread or
  *                  another mbedtls context.
  *                  true if successful
@@ -45,11 +42,11 @@ void crypto_zeroize(void *v, size_t n);
  * \note            Recursive "acquire" is not allowed. To support recursive "acquire",
  *                  we must require the same thread/mbedtls context.
  */
-bool crypto_aes_acquire(bool blocking);
+bool crypto_aes_acquire(void);
 void crypto_aes_release(void);
-bool crypto_des_acquire(bool blocking);
+bool crypto_des_acquire(void);
 void crypto_des_release(void);
-bool crypto_sha_acquire(bool blocking);
+bool crypto_sha_acquire(void);
 void crypto_sha_release(void);
 
 /* Flow control between crypto/xxx start and crypto/xxx ISR 

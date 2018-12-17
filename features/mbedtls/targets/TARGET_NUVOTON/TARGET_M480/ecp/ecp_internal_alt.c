@@ -487,7 +487,7 @@ cleanup:
 NU_STATIC void internal_open_ecc_ac(void)
 {
     /* Acquire ownership of ECC accelerator */
-    crypto_ecc_acquire(true);
+    crypto_ecc_acquire();
     
     /* Initialize crypto module */
     crypto_init();

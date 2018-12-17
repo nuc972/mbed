@@ -350,7 +350,7 @@ static int mbedtls_des_docrypt(uint16_t keyopt, uint8_t key[3][MBEDTLS_DES_KEY_S
     }
     
     /* Acquire ownership of DES H/W */
-    crypto_des_acquire(true);
+    crypto_des_acquire();
 
     /* Init crypto module */
     crypto_init();

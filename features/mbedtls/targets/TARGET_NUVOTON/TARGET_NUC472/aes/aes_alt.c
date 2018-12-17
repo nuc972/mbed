@@ -145,7 +145,7 @@ static void __nvt_aes_crypt( mbedtls_aes_context *ctx,
     }
 
     /* Acquire ownership of AES H/W */
-    crypto_aes_acquire(true);
+    crypto_aes_acquire();
 
     /* Init crypto module */
     crypto_init();
