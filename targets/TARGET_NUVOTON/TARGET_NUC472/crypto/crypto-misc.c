@@ -68,12 +68,8 @@ static crypto_submod_sem crypto_des_sem = {
     .id                 = NULL
 };
 
-/* Semaphore for crypto SHA AC management */
-static crypto_submod_sem crypto_sha_sem = {
-    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_sha_ac_sem",
-    .id                 = NULL
-};
+/* Atomic flag for crypto SHA AC management */
+core_util_atomic_flag crypto_sha_atomic_flag = CORE_UTIL_ATOMIC_FLAG_INIT;
 
 /* Crypto (AES, DES, SHA, etc.) init counter. Crypto's keeps active as it is non-zero. */
 static uint16_t crypto_init_counter = 0U;
@@ -172,12 +168,17 @@ void crypto_des_release(void)
 
 bool crypto_sha_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_sha_sem, blocking);
+    if (blocking) {
+        while (core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag));
+        return true;
+    } else {
+        return !core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag);
+    }
 }
 
 void crypto_sha_release(void)
 {
-    crypto_submodule_release(&crypto_sha_sem);
+    core_util_atomic_flag_clear(&crypto_sha_atomic_flag);
 }
 
 void crypto_prng_prestart(void)
