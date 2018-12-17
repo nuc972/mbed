@@ -32,13 +32,13 @@
  * 1. Except for SHA AC which doesn't support context save & restore, we lock all crypto AC
  *    for just their real operation rather than the whole lifetime of their crypto context.
  *    For SHA AC, we provide SHA S/W fallback when SHA AC is not available. This policy can
- *    avoid deadlock.
+ *    avoid deadlock. We choose mutex to synchronize access to crypto non-SHA AC. Known
+ *    drawback of this choice is priority inversion.
  * 2. SHA context can be init'ed in one thread and free'ed in another thread. We cannot
  *    choose mutex for locking SHA AC for the whole lifetime of SHA context because mutex
- *    requires lock/unlock in the same thread.
- * 3. Busy-wait loop would bite CPU.
- * 4. Finally, we choose semaphore to synchronize access to crypto AC. Known drawback of this
- *    choice is priority inversion.
+ *    requires lock/unlock in the same thread. We choose atomic flag to synchronize access
+ *    to crypto SHA AC. By just try-acquire SHA AC and fallback to S/W on failure, we avoid
+ *    busy-wait loop which would bite CPU.
  */
 
 /* Synchronization object init status */
@@ -46,43 +46,43 @@
 #define SYNCOBJ_INITSTATUS_INITING      1   // Initializing
 #define SYNCOBJ_INITSTATUS_INITED       2   // Initialized
 
-/* Wrapper of CMSIS-RTOS2 semaphore */
-typedef struct _crypto_submod_sem {
+/* Wrapper of CMSIS-RTOS2 mutex */
+typedef struct _crypto_submod_mutex {
     volatile uint16_t               init_status;
     const char *                    name;
-    osSemaphoreId_t                 id;
-    mbed_rtos_storage_semaphore_t   cb_mem;
-} crypto_submod_sem;
+    osMutexId_t                     id;
+    mbed_rtos_storage_mutex_t       cb_mem;
+} crypto_submod_mutex;
 
-/* Semaphore for crypto AES AC management */
-static crypto_submod_sem crypto_aes_sem = {
+/* Mutex for crypto AES AC management */
+static crypto_submod_mutex crypto_aes_mutex = {
     .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_aes_ac_sem",
+    .name               = "nu_aes_ac_mutex",
     .id                 = NULL
 };
 
-/* Semaphore for crypto DES AC management */
-static crypto_submod_sem crypto_des_sem = {
+/* Mutex for crypto DES AC management */
+static crypto_submod_mutex crypto_des_mutex = {
     .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_des_ac_sem",
+    .name               = "nu_des_ac_mutex",
     .id                 = NULL
 };
 
 /* Atomic flag for crypto SHA AC management */
 core_util_atomic_flag crypto_sha_atomic_flag = CORE_UTIL_ATOMIC_FLAG_INIT;
 
-/* Semaphore for crypto ECC AC management */
-static crypto_submod_sem crypto_ecc_sem = {
+/* Mutex for crypto ECC AC management */
+static crypto_submod_mutex crypto_ecc_mutex = {
     .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_ecc_ac_sem",
+    .name               = "nu_ecc_ac_mutex",
     .id                 = NULL
 };
 
 /* Crypto (AES, DES, SHA, etc.) init counter. Crypto's keeps active as it is non-zero. */
 static uint16_t crypto_init_counter = 0U;
 
-static bool crypto_submodule_acquire(crypto_submod_sem *crypto_submod_sem, bool blocking);
-static void crypto_submodule_release(crypto_submod_sem *crypto_submod_sem);
+static bool crypto_submodule_acquire(crypto_submod_mutex *crypto_submod_mutex, bool blocking);
+static void crypto_submodule_release(crypto_submod_mutex *crypto_submod_mutex);
 
 /* Crypto done flags */
 #define CRYPTO_DONE_OK              BIT0    /* Done with OK */
@@ -166,22 +166,22 @@ void crypto_zeroize32(uint32_t *v, size_t n)
 
 bool crypto_aes_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_aes_sem, blocking);
+    return crypto_submodule_acquire(&crypto_aes_mutex, blocking);
 }
 
 void crypto_aes_release(void)
 {
-    crypto_submodule_release(&crypto_aes_sem);
+    crypto_submodule_release(&crypto_aes_mutex);
 }
 
 bool crypto_des_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_des_sem, blocking);
+    return crypto_submodule_acquire(&crypto_des_mutex, blocking);
 }
 
 void crypto_des_release(void)
 {
-    crypto_submodule_release(&crypto_des_sem);
+    crypto_submodule_release(&crypto_des_mutex);
 }
 
 bool crypto_sha_acquire(bool blocking)
@@ -201,12 +201,12 @@ void crypto_sha_release(void)
 
 bool crypto_ecc_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_ecc_sem, blocking);
+    return crypto_submodule_acquire(&crypto_ecc_mutex, blocking);
 }
 
 void crypto_ecc_release(void)
 {
-    crypto_submodule_release(&crypto_ecc_sem);
+    crypto_submodule_release(&crypto_ecc_mutex);
 }
 
 void crypto_prng_prestart(void)
@@ -290,48 +290,48 @@ bool crypto_dma_buffs_overlap(const void *in_buff, size_t in_buff_size, const vo
     return overlap;
 }
 
-static bool crypto_submodule_acquire(crypto_submod_sem *crypto_submod_sem, bool blocking)
+static bool crypto_submodule_acquire(crypto_submod_mutex *crypto_submod_mutex, bool blocking)
 {
-    MBED_ASSERT(crypto_submod_sem);
+    MBED_ASSERT(crypto_submod_mutex);
 
-    /* Initialize semaphore only once and atomically */
+    /* Initialize mutex only once and atomically */
     uint16_t expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
     while (1) {
-        /* Try to initialize semaphore if it has not initialized yet */
-        if (core_util_atomic_cas_u16(&crypto_submod_sem->init_status,
+        /* Try to initialize mutex if it has not initialized yet */
+        if (core_util_atomic_cas_u16(&crypto_submod_mutex->init_status,
                                      &expectedCurrentValue,
                                      SYNCOBJ_INITSTATUS_INITING)) {
-            /* Semaphore hasn't initialized yet. Initialize it. */
-            MBED_ASSERT(crypto_submod_sem->id == NULL);
-            memset(&crypto_submod_sem->cb_mem, 0, sizeof(crypto_submod_sem->cb_mem));
-            osSemaphoreAttr_t attr = { 0 };
-            attr.name = crypto_submod_sem->name;
-            attr.cb_mem = &crypto_submod_sem->cb_mem;
-            attr.cb_size = sizeof(crypto_submod_sem->cb_mem);
-            crypto_submod_sem->id = osSemaphoreNew(1, 1, &attr);
-            MBED_ASSERT(crypto_submod_sem->id);
+            /* Mutex hasn't initialized yet. Initialize it. */
+            MBED_ASSERT(crypto_submod_mutex->id == NULL);
+            memset(&crypto_submod_mutex->cb_mem, 0, sizeof(crypto_submod_mutex->cb_mem));
+            osMutexAttr_t attr = { 0 };
+            attr.name = crypto_submod_mutex->name;
+            attr.cb_mem = &crypto_submod_mutex->cb_mem;
+            attr.cb_size = sizeof(crypto_submod_mutex->cb_mem);
+            crypto_submod_mutex->id = osMutexNew(&attr);
+            MBED_ASSERT(crypto_submod_mutex->id);
 
-            /* Semaphore has initialized. Announce it. */
-            crypto_submod_sem->init_status = SYNCOBJ_INITSTATUS_INITED;
+            /* Mutex has initialized. Announce it. */
+            crypto_submod_mutex->init_status = SYNCOBJ_INITSTATUS_INITED;
 
             break;
         } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITING) {
-            /* Semaphore is initializing by another thread. Wait for it. */
-            while (crypto_submod_sem->init_status != SYNCOBJ_INITSTATUS_INITED);
+            /* Mutex is initializing by another thread. Wait for it. */
+            while (crypto_submod_mutex->init_status != SYNCOBJ_INITSTATUS_INITED);
             break;
         } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITED) {
-            /* Semaphore has initialized. */
+            /* Mutex has initialized. */
             break;
         }
 
-        /* Re-try initializing semaphore */
+        /* Re-try initializing mutex */
         expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
     }
 
-    MBED_ASSERT(crypto_submod_sem->id);
+    MBED_ASSERT(crypto_submod_mutex->id);
 
     uint32_t millisec = blocking ? osWaitForever : 0;
-    osStatus_t status = osSemaphoreAcquire(crypto_submod_sem->id, millisec);
+    osStatus_t status = osMutexAcquire(crypto_submod_mutex->id, millisec);
     if (status == osOK) {
         return true;
     }
@@ -340,24 +340,24 @@ static bool crypto_submodule_acquire(crypto_submod_sem *crypto_submod_sem, bool 
     bool nofatal = (status == osErrorResource && millisec == 0) ||
                    (status == osErrorTimeout && millisec != osWaitForever);
     if (!nofatal) {
-        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_SEMAPHORE_LOCK_FAILED), "Semaphore lock failed", status);
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_MUTEX_LOCK_FAILED), "Mutex lock failed", status);
     }
 
     return false;
 }
 
-static void crypto_submodule_release(crypto_submod_sem *crypto_submod_sem)
+static void crypto_submodule_release(crypto_submod_mutex *crypto_submod_mutex)
 {
-    MBED_ASSERT(crypto_submod_sem);
-    MBED_ASSERT(crypto_submod_sem->id);
+    MBED_ASSERT(crypto_submod_mutex);
+    MBED_ASSERT(crypto_submod_mutex->id);
 
-    osStatus_t status = osSemaphoreRelease(crypto_submod_sem->id);
+    osStatus_t status = osMutexRelease(crypto_submod_mutex->id);
     if (status != osOK) {
-        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_SEMAPHORE_UNLOCK_FAILED), "Semaphore unlock failed", status);
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_MUTEX_UNLOCK_FAILED), "Mutex unlock failed", status);
     }
 
-    /* To avoid frequent semaphore allocate/free (osSemaphoreNew()/osSemaphoreDelete()),
-     * we just allocate semaphore once and never free it. */
+    /* To avoid frequent mutex allocate/free (osMutexNew()/osMutexDelete()),
+     * we just allocate mutex once and never free it. */
 }
 
 static void crypto_submodule_prestart(volatile uint16_t *submodule_done)
