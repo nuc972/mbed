@@ -26,6 +26,8 @@
 #include "nu_modutil.h"
 #include "nu_bitutil.h"
 #include "crypto-misc.h"
+#include "SingletonPtr.h"
+#include "Mutex.h"
 
 /* Consideration for choosing proper synchronization mechanism
  *
@@ -41,48 +43,18 @@
  *    busy-wait loop which would bite CPU.
  */
 
-/* Synchronization object init status */
-#define SYNCOBJ_INITSTATUS_UNINIT       0   // Un-initialized
-#define SYNCOBJ_INITSTATUS_INITING      1   // Initializing
-#define SYNCOBJ_INITSTATUS_INITED       2   // Initialized
-
-/* Wrapper of CMSIS-RTOS2 mutex */
-typedef struct _crypto_submod_mutex {
-    volatile uint16_t               init_status;
-    const char *                    name;
-    osMutexId_t                     id;
-    mbed_rtos_storage_mutex_t       cb_mem;
-} crypto_submod_mutex;
-
 /* Mutex for crypto AES AC management */
-static crypto_submod_mutex crypto_aes_mutex = {
-    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_aes_ac_mutex",
-    .id                 = NULL
-};
+SingletonPtr<rtos::Mutex> crypto_aes_mutex;
 
 /* Mutex for crypto DES AC management */
-static crypto_submod_mutex crypto_des_mutex = {
-    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_des_ac_mutex",
-    .id                 = NULL
-};
+SingletonPtr<rtos::Mutex> crypto_des_mutex;
 
 /* Atomic flag for crypto SHA AC management */
 core_util_atomic_flag crypto_sha_atomic_flag = CORE_UTIL_ATOMIC_FLAG_INIT;
 
-/* Mutex for crypto ECC AC management */
-static crypto_submod_mutex crypto_ecc_mutex = {
-    .init_status        = SYNCOBJ_INITSTATUS_UNINIT,
-    .name               = "nu_ecc_ac_mutex",
-    .id                 = NULL
-};
 
 /* Crypto (AES, DES, SHA, etc.) init counter. Crypto's keeps active as it is non-zero. */
 static uint16_t crypto_init_counter = 0U;
-
-static bool crypto_submodule_acquire(crypto_submod_mutex *crypto_submod_mutex, bool blocking);
-static void crypto_submodule_release(crypto_submod_mutex *crypto_submod_mutex);
 
 /* Crypto done flags */
 #define CRYPTO_DONE_OK              BIT0    /* Done with OK */
@@ -94,8 +66,6 @@ static volatile uint16_t crypto_prng_done;
 static volatile uint16_t crypto_aes_done;
 /* Track if DES H/W operation is done */
 static volatile uint16_t crypto_des_done;
-/* Track if ECC H/W operation is done */
-static volatile uint16_t crypto_ecc_done;
 
 static void crypto_submodule_prestart(volatile uint16_t *submodule_done);
 static bool crypto_submodule_wait(volatile uint16_t *submodule_done);
@@ -155,33 +125,24 @@ void crypto_zeroize(void *v, size_t n)
     }
 }
 
-/* Implementation that should never be optimized out by the compiler */
-void crypto_zeroize32(uint32_t *v, size_t n)
-{
-    volatile uint32_t *p = (volatile uint32_t*) v;
-    while (n--) {
-        *p++ = 0;
-    }
-}
-
 bool crypto_aes_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_aes_mutex, blocking);
+    return crypto_aes_mutex->trylock_for(blocking ? osWaitForever : 0);
 }
 
 void crypto_aes_release(void)
 {
-    crypto_submodule_release(&crypto_aes_mutex);
+    crypto_aes_mutex->unlock();
 }
 
 bool crypto_des_acquire(bool blocking)
 {
-    return crypto_submodule_acquire(&crypto_des_mutex, blocking);
+    return crypto_des_mutex->trylock_for(blocking ? osWaitForever : 0);
 }
 
 void crypto_des_release(void)
 {
-    crypto_submodule_release(&crypto_des_mutex);
+    crypto_des_mutex->unlock();
 }
 
 bool crypto_sha_acquire(bool blocking)
@@ -197,16 +158,6 @@ bool crypto_sha_acquire(bool blocking)
 void crypto_sha_release(void)
 {
     core_util_atomic_flag_clear(&crypto_sha_atomic_flag);
-}
-
-bool crypto_ecc_acquire(bool blocking)
-{
-    return crypto_submodule_acquire(&crypto_ecc_mutex, blocking);
-}
-
-void crypto_ecc_release(void)
-{
-    crypto_submodule_release(&crypto_ecc_mutex);
 }
 
 void crypto_prng_prestart(void)
@@ -237,16 +188,6 @@ void crypto_des_prestart(void)
 bool crypto_des_wait(void)
 {
     return crypto_submodule_wait(&crypto_des_done);
-}
-
-void crypto_ecc_prestart(void)
-{
-    crypto_submodule_prestart(&crypto_ecc_done);
-}
-
-bool crypto_ecc_wait(void)
-{
-    return crypto_submodule_wait(&crypto_ecc_done);
 }
 
 bool crypto_dma_buff_compat(const void *buff, size_t buff_size, size_t size_aligned_to)
@@ -290,76 +231,6 @@ bool crypto_dma_buffs_overlap(const void *in_buff, size_t in_buff_size, const vo
     return overlap;
 }
 
-static bool crypto_submodule_acquire(crypto_submod_mutex *crypto_submod_mutex, bool blocking)
-{
-    MBED_ASSERT(crypto_submod_mutex);
-
-    /* Initialize mutex only once and atomically */
-    uint16_t expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
-    while (1) {
-        /* Try to initialize mutex if it has not initialized yet */
-        if (core_util_atomic_cas_u16(&crypto_submod_mutex->init_status,
-                                     &expectedCurrentValue,
-                                     SYNCOBJ_INITSTATUS_INITING)) {
-            /* Mutex hasn't initialized yet. Initialize it. */
-            MBED_ASSERT(crypto_submod_mutex->id == NULL);
-            memset(&crypto_submod_mutex->cb_mem, 0, sizeof(crypto_submod_mutex->cb_mem));
-            osMutexAttr_t attr = { 0 };
-            attr.name = crypto_submod_mutex->name;
-            attr.cb_mem = &crypto_submod_mutex->cb_mem;
-            attr.cb_size = sizeof(crypto_submod_mutex->cb_mem);
-            crypto_submod_mutex->id = osMutexNew(&attr);
-            MBED_ASSERT(crypto_submod_mutex->id);
-
-            /* Mutex has initialized. Announce it. */
-            crypto_submod_mutex->init_status = SYNCOBJ_INITSTATUS_INITED;
-
-            break;
-        } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITING) {
-            /* Mutex is initializing by another thread. Wait for it. */
-            while (crypto_submod_mutex->init_status != SYNCOBJ_INITSTATUS_INITED);
-            break;
-        } else if (expectedCurrentValue == SYNCOBJ_INITSTATUS_INITED) {
-            /* Mutex has initialized. */
-            break;
-        }
-
-        /* Re-try initializing mutex */
-        expectedCurrentValue = SYNCOBJ_INITSTATUS_UNINIT;
-    }
-
-    MBED_ASSERT(crypto_submod_mutex->id);
-
-    uint32_t millisec = blocking ? osWaitForever : 0;
-    osStatus_t status = osMutexAcquire(crypto_submod_mutex->id, millisec);
-    if (status == osOK) {
-        return true;
-    }
-
-    /* Check fatal error */
-    bool nofatal = (status == osErrorResource && millisec == 0) ||
-                   (status == osErrorTimeout && millisec != osWaitForever);
-    if (!nofatal) {
-        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_MUTEX_LOCK_FAILED), "Mutex lock failed", status);
-    }
-
-    return false;
-}
-
-static void crypto_submodule_release(crypto_submod_mutex *crypto_submod_mutex)
-{
-    MBED_ASSERT(crypto_submod_mutex);
-    MBED_ASSERT(crypto_submod_mutex->id);
-
-    osStatus_t status = osMutexRelease(crypto_submod_mutex->id);
-    if (status != osOK) {
-        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_KERNEL, MBED_ERROR_CODE_MUTEX_UNLOCK_FAILED), "Mutex unlock failed", status);
-    }
-
-    /* To avoid frequent mutex allocate/free (osMutexNew()/osMutexDelete()),
-     * we just allocate mutex once and never free it. */
-}
-
 static void crypto_submodule_prestart(volatile uint16_t *submodule_done)
 {
     *submodule_done = 0;
@@ -393,7 +264,7 @@ static bool crypto_submodule_wait(volatile uint16_t *submodule_done)
 }
 
 /* Crypto interrupt handler */
-void CRYPTO_IRQHandler()
+extern "C" void CRYPTO_IRQHandler()
 {
     uint32_t intsts;
     
@@ -412,16 +283,5 @@ void CRYPTO_IRQHandler()
         crypto_des_done |= CRYPTO_DONE_OK;
         /* Clear interrupt flag */
         TDES_CLR_INT_FLAG();
-    } else if ((intsts = ECC_GET_INT_FLAG()) != 0) {
-        /* Check interrupt flags */
-        if (intsts & CRPT_INTSTS_ECCIF_Msk) {
-            /* Done with OK */
-            crypto_ecc_done |= CRYPTO_DONE_OK;
-        } else if (intsts & CRPT_INTSTS_ECCEIF_Msk) {
-            /* Done with error */
-            crypto_ecc_done |= CRYPTO_DONE_ERR;
-        }
-        /* Clear interrupt flag */
-        ECC_CLR_INT_FLAG();
     }
 }
