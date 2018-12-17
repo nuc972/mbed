@@ -34,8 +34,7 @@
  * 1. Except for SHA AC which doesn't support context save & restore, we lock all crypto AC
  *    for just their real operation rather than the whole lifetime of their crypto context.
  *    For SHA AC, we provide SHA S/W fallback when SHA AC is not available. This policy can
- *    avoid deadlock. We choose mutex to synchronize access to crypto non-SHA AC. Known
- *    drawback of this choice is priority inversion.
+ *    avoid deadlock. We choose mutex to synchronize access to crypto non-SHA AC.
  * 2. SHA context can be init'ed in one thread and free'ed in another thread. We cannot
  *    choose mutex for locking SHA AC for the whole lifetime of SHA context because mutex
  *    requires lock/unlock in the same thread. We choose atomic flag to synchronize access
