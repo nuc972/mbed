@@ -44,13 +44,13 @@
  */
 
 /* Mutex for crypto AES AC management */
-SingletonPtr<rtos::Mutex> crypto_aes_mutex;
+static SingletonPtr<rtos::Mutex> crypto_aes_mutex;
 
 /* Mutex for crypto DES AC management */
-SingletonPtr<rtos::Mutex> crypto_des_mutex;
+static SingletonPtr<rtos::Mutex> crypto_des_mutex;
 
 /* Atomic flag for crypto SHA AC management */
-core_util_atomic_flag crypto_sha_atomic_flag = CORE_UTIL_ATOMIC_FLAG_INIT;
+static core_util_atomic_flag crypto_sha_atomic_flag = CORE_UTIL_ATOMIC_FLAG_INIT;
 
 
 /* Crypto (AES, DES, SHA, etc.) init counter. Crypto's keeps active as it is non-zero. */
