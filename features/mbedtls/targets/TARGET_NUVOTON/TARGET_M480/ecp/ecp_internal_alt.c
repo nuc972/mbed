@@ -230,8 +230,7 @@ int mbedtls_internal_ecp_init( const mbedtls_ecp_group *grp )
      *
      * 1. Paired
      * 2. No overlapping
-     * 3. Upper public function cannot return when ECP alter. is still activated. This lets
-     *    off priority inversion when using mutex for ECC AC management.
+     * 3. Upper public function cannot return when ECP alter. is still activated.
      */
     
     /* Acquire ownership of ECC accelerator */

@@ -31,15 +31,18 @@
 
 /* Consideration for choosing proper synchronization mechanism
  *
- * 1. Except for SHA AC which doesn't support context save & restore, we lock all crypto AC
- *    for just their real operation rather than the whole lifetime of their crypto context.
- *    For SHA AC, we provide SHA S/W fallback when SHA AC is not available. This policy can
- *    avoid deadlock. We choose mutex to synchronize access to crypto non-SHA AC.
- * 2. SHA context can be init'ed in one thread and free'ed in another thread. We cannot
- *    choose mutex for locking SHA AC for the whole lifetime of SHA context because mutex
- *    requires lock/unlock in the same thread. We choose atomic flag to synchronize access
- *    to crypto SHA AC. By just try-acquire SHA AC and fallback to S/W on failure, we avoid
- *    busy-wait loop which would bite CPU.
+ * 1. We choose mutex to synchronize access to crypto non-SHA AC. We can guarantee:
+ *    (1) No deadlock
+ *        We just lock mutex for a short sequence of operations rather than the whole lifetime
+ *        of crypto context.
+ *    (2) No priority inversion
+ *        Mutex supports priority inheritance and it is enabled.
+ * 2. We choose atomic flag to synchronize access to crypto SHA AC. We can guarantee:
+ *    (1) No deadlock
+ *        With SHA AC not supporting context save & restore, we provide SHA S/W fallback when
+ *        SHA AC is not available.
+ *    (2) No biting CPU
+ *        Same reason as above.
  */
 
 /* Mutex for crypto AES AC management */
