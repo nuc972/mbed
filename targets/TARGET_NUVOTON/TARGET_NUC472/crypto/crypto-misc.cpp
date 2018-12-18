@@ -126,7 +126,14 @@ void crypto_zeroize(void *v, size_t n)
 
 bool crypto_aes_acquire(void)
 {
-    return crypto_aes_mutex->lock() == osOK;
+    /* Don't check return code of Mutex::lock(void)
+     *
+     * This function treats RTOS errors as fatal system errors, so it can only return osOK.
+     * Use of the return value is deprecated, as the return is expected to become void in
+     * the future.
+     */
+    crypto_aes_mutex->lock();
+    return true;
 }
 
 void crypto_aes_release(void)
@@ -136,7 +143,9 @@ void crypto_aes_release(void)
 
 bool crypto_des_acquire(void)
 {
-    return crypto_des_mutex->lock() == osOK;
+    /* Don't check return code of Mutex::lock(void) */
+    crypto_des_mutex->lock();
+    return true;
 }
 
 void crypto_des_release(void)
