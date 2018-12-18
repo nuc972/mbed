@@ -34,23 +34,30 @@ void crypto_zeroize32(uint32_t *v, size_t n);
 
 /* Acquire/release ownership of crypto sub-module
  * 
+ * \note            "acquire" is blocking until ownership is acquired
+ *
+ * \note            "acquire"/"release" must be paired.
+ *
+ * \note            Recursive "acquire" is allowed because the underlying synchronization
+ *                  primitive mutex supports it.
+ */
+void crypto_aes_acquire(void);
+void crypto_aes_release(void);
+void crypto_des_acquire(void);
+void crypto_des_release(void);
+void crypto_ecc_acquire(void);
+void crypto_ecc_release(void);
+
+/* Acquire/release ownership of crypto sub-module
+ * 
  * \return          false if crytpo sub-module is held by another thread or
  *                  another mbedtls context.
  *                  true if successful
  *
- * \note            "acquire"/"release" must be paired.
- *
- * \note            Recursive "acquire" is not allowed. To support recursive "acquire",
- *                  we must require the same thread/mbedtls context.
+ * \note            Successful "try_acquire" and "release" must be paired.
  */
-bool crypto_aes_acquire(void);
-void crypto_aes_release(void);
-bool crypto_des_acquire(void);
-void crypto_des_release(void);
-bool crypto_sha_acquire(void);
+bool crypto_sha_try_acquire(void);
 void crypto_sha_release(void);
-bool crypto_ecc_acquire(void);
-void crypto_ecc_release(void);
 
 /* Flow control between crypto/xxx start and crypto/xxx ISR 
  *

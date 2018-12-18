@@ -124,7 +124,7 @@ void crypto_zeroize(void *v, size_t n)
     }
 }
 
-bool crypto_aes_acquire(void)
+void crypto_aes_acquire(void)
 {
     /* Don't check return code of Mutex::lock(void)
      *
@@ -133,7 +133,6 @@ bool crypto_aes_acquire(void)
      * the future.
      */
     crypto_aes_mutex->lock();
-    return true;
 }
 
 void crypto_aes_release(void)
@@ -141,11 +140,10 @@ void crypto_aes_release(void)
     crypto_aes_mutex->unlock();
 }
 
-bool crypto_des_acquire(void)
+void crypto_des_acquire(void)
 {
     /* Don't check return code of Mutex::lock(void) */
     crypto_des_mutex->lock();
-    return true;
 }
 
 void crypto_des_release(void)
@@ -153,7 +151,7 @@ void crypto_des_release(void)
     crypto_des_mutex->unlock();
 }
 
-bool crypto_sha_acquire(void)
+bool crypto_sha_try_acquire(void)
 {
     return !core_util_atomic_flag_test_and_set(&crypto_sha_atomic_flag);
 }
