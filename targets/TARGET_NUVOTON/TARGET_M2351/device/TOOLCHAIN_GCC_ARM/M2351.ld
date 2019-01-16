@@ -72,7 +72,17 @@
 
 #endif
 
+#if (defined(DOMAIN_NS) && DOMAIN_NS) || (TFM_LVL == 0)
+
 StackSize = MBED_BOOT_STACK_SIZE;
+
+#else
+
+#warning("Ignore MBED_BOOT_STACK_SIZE in Secure PSA build")
+__msp_stack_size__ = 0x00000800;
+__psp_stack_size__ = 0x00000800;
+
+#endif
 
 /* Requirements for NSC location
  *
@@ -150,6 +160,8 @@ SECTIONS
          . = ALIGN(8);
     } > VECTORS
 
+#if (defined(DOMAIN_NS) && DOMAIN_NS) || (TFM_LVL == 0)
+
     .copy.table : ALIGN(4)
     {
         __copy_table_start__ = .;
@@ -166,6 +178,35 @@ SECTIONS
         LONG (SIZEOF(.bss))
         __zero_table_end__ = .;
     } > FLASH
+
+#elif TFM_LVL == 1
+
+    .copy.table : ALIGN(4)
+    {
+        __copy_table_start__ = .;
+        LONG (LOADADDR(.TFM_DATA))
+        LONG (ADDR(.TFM_DATA))
+        LONG (SIZEOF(.TFM_DATA))
+        __copy_table_end__ = .;
+    } > FLASH
+
+    .zero.table : ALIGN(4)
+    {
+        __zero_table_start__ = .;
+        LONG (ADDR(.TFM_BSS))
+        LONG (SIZEOF(.TFM_BSS))
+        LONG (ADDR(.TFM_SECURE_STACK))
+        LONG (SIZEOF(.TFM_SECURE_STACK))
+        LONG (ADDR(.TFM_UNPRIV_SCRATCH))
+        LONG (SIZEOF(.TFM_UNPRIV_SCRATCH))
+        __zero_table_end__ = .;
+    } > FLASH
+
+#else
+
+    #error("TFM level 2/3 are not supported yet")
+    
+#endif
 
     .text :
     {
@@ -193,6 +234,79 @@ SECTIONS
         KEEP(*(.eh_frame*))
     } > FLASH
 
+    /* Stack Pointer (SP) configuration with GCC_ARM
+     *
+     * SP would go through the following configuration sequence:
+     * (1) SP(MSP) <- Entry 0 of vector table (on H/W reset)
+     * (2) Switch SP from MSP to PSP in startup file (as TFM requests)
+     * (3) SP(PSP) <- __stack (in _start(), C/C++ runtime initialization)
+     *
+     * S(3) may cause SP(PSP) incorrectly configured. To avoid this error, __stack
+     * is assigned conditionally according to Secure PSA or not.
+     */
+
+#if (defined(DOMAIN_NS) && DOMAIN_NS) || (TFM_LVL == 0)
+
+    .stack (NOLOAD) :
+    {
+        . = ALIGN(8);
+        __StackLimit = .;
+        . += StackSize;
+        __StackTop = .;
+    } > RAM_INTERN
+
+    PROVIDE(__stack = __StackTop);
+
+#else
+
+    .msp_stack (NOLOAD) :
+    {
+        . = ALIGN(32);
+        . += __msp_stack_size__;
+    } > RAM_INTERN
+    Image$$ARM_LIB_STACK_MSP$$ZI$$Base = ADDR(.msp_stack);
+    Image$$ARM_LIB_STACK_MSP$$ZI$$Limit = ADDR(.msp_stack) + SIZEOF(.msp_stack);
+    __StackLimit = Image$$ARM_LIB_STACK_MSP$$ZI$$Base;
+    __StackTop = Image$$ARM_LIB_STACK_MSP$$ZI$$Limit;
+
+    .psp_stack (NOLOAD) :
+    {
+        . = ALIGN(32);
+        . += __psp_stack_size__;
+    } > RAM_INTERN
+    Image$$ARM_LIB_STACK$$ZI$$Base = ADDR(.psp_stack);
+    Image$$ARM_LIB_STACK$$ZI$$Limit = ADDR(.psp_stack) + SIZEOF(.psp_stack);
+
+    PROVIDE(__stack = Image$$ARM_LIB_STACK$$ZI$$Limit);
+
+#endif
+
+#if (defined(DOMAIN_NS) && DOMAIN_NS) || (TFM_LVL == 0)
+
+#elif TFM_LVL == 1
+
+    .TFM_SECURE_STACK (NOLOAD) :
+    {
+        . = ALIGN(128);
+        . += 0x1000;
+    } > RAM_INTERN
+    Image$$TFM_SECURE_STACK$$ZI$$Base = ADDR(.TFM_SECURE_STACK);
+    Image$$TFM_SECURE_STACK$$ZI$$Limit = ADDR(.TFM_SECURE_STACK) + SIZEOF(.TFM_SECURE_STACK);
+
+    .TFM_UNPRIV_SCRATCH (NOLOAD) :
+    {
+        . = ALIGN(32);
+        . += 0x400;
+    } > RAM_INTERN
+    Image$$TFM_UNPRIV_SCRATCH$$ZI$$Base = ADDR(.TFM_UNPRIV_SCRATCH);
+    Image$$TFM_UNPRIV_SCRATCH$$ZI$$Limit = ADDR(.TFM_UNPRIV_SCRATCH) + SIZEOF(.TFM_UNPRIV_SCRATCH);
+
+#elif TFM_LVL > 1
+
+    #error("TFM level 2/3 are not supported yet")
+
+#endif
+
 #if (! defined(DOMAIN_NS)) || (! DOMAIN_NS)
     /* Veneer$$CMSE : */
     .gnu.sgstubs :
@@ -208,6 +322,7 @@ SECTIONS
     /* By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000. */
     ASSERT(__sgstubs_start >= 0x4000, "By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000.")
 #endif
+
     .ARM.extab :
     {
         *(.ARM.extab* .gnu.linkonce.armextab.*)
@@ -220,23 +335,6 @@ SECTIONS
        __exidx_end = .;
     } > FLASH
 
-    /* .stack section doesn't contains any symbols. It is only
-     * used for linker to reserve space for the main stack section
-     * WARNING: .stack should come immediately after the last secure memory
-     * section.  This provides stack overflow detection. */
-    .stack (NOLOAD):
-    {
-        __StackLimit = .;
-        *(.stack*);
-        . += StackSize - (. - __StackLimit);
-    } > RAM_INTERN
-
-    /* Set stack top to end of RAM, and stack limit move down by
-     * size of stack_dummy section */
-    __StackTop = ADDR(.stack) + SIZEOF(.stack);
-    __StackLimit = ADDR(.stack);
-    PROVIDE(__stack = __StackTop);
-
     /* Relocate vector table in SRAM */
     .isr_vector.reloc (NOLOAD) :
     {
@@ -245,7 +343,9 @@ SECTIONS
         . += __vector_size;
         PROVIDE(__end_vector_table__ = .);
     } > RAM_INTERN
-    
+
+#if (defined(DOMAIN_NS) && DOMAIN_NS) || (TFM_LVL == 0)
+
     .data :
     {
         PROVIDE( __etext = LOADADDR(.data) );
@@ -288,15 +388,66 @@ SECTIONS
         __bss_end__ = .;
     } > RAM_INTERN
 
-    .heap (NOLOAD):
+#else
+
+    .TFM_DATA :
     {
+        . = ALIGN(4);
+        *(.data*)
+
+        . = ALIGN(4);
+        /* preinit data */
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+        KEEP(*(.preinit_array))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+
+        . = ALIGN(4);
+        /* init data */
+        PROVIDE_HIDDEN (__init_array_start = .);
+        KEEP(*(SORT(.init_array.*)))
+        KEEP(*(.init_array))
+        PROVIDE_HIDDEN (__init_array_end = .);
+
+        . = ALIGN(4);
+        /* finit data */
+        PROVIDE_HIDDEN (__fini_array_start = .);
+        KEEP(*(SORT(.fini_array.*)))
+        KEEP(*(.fini_array))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+
+        KEEP(*(.jcr*))
+        . = ALIGN(4);
+
+    } > RAM_INTERN AT>FLASH
+    Image$$ER_TFM_DATA$$RW$$Base = ADDR(.TFM_DATA);
+    Image$$ER_TFM_DATA$$RW$$Limit = ADDR(.TFM_DATA) + SIZEOF(.TFM_DATA);
+
+    .TFM_BSS (NOLOAD) :
+    {
+        . = ALIGN(4);
+        __bss_start__ = .;
+        *(.bss*)
+        *(COMMON)
+        . = ALIGN(4);
+        __bss_end__ = .;
+    } > RAM_INTERN
+    Image$$ER_TFM_DATA$$ZI$$Base = ADDR(.TFM_BSS);
+    Image$$ER_TFM_DATA$$ZI$$Limit = ADDR(.TFM_BSS) + SIZEOF(.TFM_BSS);
+
+#endif
+
+    .heap (NOLOAD) :
+    {
+        . = ALIGN(8);
         __end__ = .;
         end = __end__;
         *(.heap*);
         . += (ORIGIN(RAM_INTERN) + LENGTH(RAM_INTERN) - .);        
         __HeapLimit = .;
     } > RAM_INTERN
-    
+    Image$$ARM_LIB_HEAP$$ZI$$Base = ADDR(.heap);
+    Image$$ARM_LIB_HEAP$$ZI$$Limit = ADDR(.heap) + SIZEOF(.heap);
+
     PROVIDE(__heap_size = SIZEOF(.heap));
     PROVIDE(__mbed_sbrk_start = ADDR(.heap));
     PROVIDE(__mbed_krbs_start = ADDR(.heap) + SIZEOF(.heap));

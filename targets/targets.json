@@ -8064,8 +8064,7 @@
         "macros_add": ["CMSDK_CM7"],
         "device_has_add": ["MPU"]
     },
-    "NUMAKER_PFM_M2351": {
-        "core": "Cortex-M23-NS",
+    "NUMAKER_PFM_M2351_CM": {
         "default_toolchain": "ARMC6",
         "extra_labels": [
             "NUVOTON",
@@ -8076,7 +8075,6 @@
         "OUTPUT_EXT": "hex",
         "macros": [
             "MBED_FAULT_HANDLER_DISABLED",
-            "MBED_TZ_DEFAULT_ACCESS=1",
             "LPTICKER_DELAY_TICKS=3"
         ],
         "is_disk_virtual": true,
@@ -8129,15 +8127,86 @@
             "FLASH",
             "MPU"
         ],
+        "components": [],
         "detect_code": ["1305"],
         "release_versions": ["5"],
         "device_name": "M2351KIAAEES",
         "bootloader_supported": true,
         "tickless-from-us-ticker": true,
-        "mbed_rom_start"    : "0x10040000",
-        "mbed_rom_size"     : "0x40000",
-        "mbed_ram_start"    : "0x30008000",
-        "mbed_ram_size"     : "0x10000"
+        "public": false
+    },
+    "NUMAKER_PFM_M2351_NOPSA_NS": {
+        "inherits": ["NUMAKER_PFM_M2351_CM"],
+        "core": "Cortex-M23-NS",
+        "extra_labels_add": [
+            "M2351_NS"
+        ],
+        "device_has_remove": [],
+        "macros_add": [
+            "MBED_TZ_DEFAULT_ACCESS=1"
+        ],
+        "components_add": ["NSPE", "PSA_SRV_EMUL", "PSA_SRV_IMPL"],
+        "components_remove": [],
+        "mbed_rom_start"        : "0x10040000",
+        "mbed_rom_size"         : "0x40000",
+        "mbed_ram_start"        : "0x30008000",
+        "mbed_ram_size"         : "0x10000"
+    },
+    "NUMAKER_PFM_M2351_NOPSA_S": {
+        "inherits": ["NUMAKER_PFM_M2351_CM"],
+        "core": "Cortex-M23",
+        "extra_labels_add": [
+            "M2351_S"
+        ],
+        "device_has_remove": ["TRNG"],
+        "components_add": ["FLASHIAP", "SPE"],
+        "components_remove": [],
+        "mbed_rom_start"        : "0x0",
+        "mbed_rom_size"         : "0x40000",
+        "mbed_ram_start"        : "0x20000000",
+        "mbed_ram_size"         : "0x8000"
+    },
+    "NUMAKER_PFM_M2351_NS": {
+        "inherits": ["NUMAKER_PFM_M2351_CM"],
+        "core": "Cortex-M23-NS",
+        "extra_labels_add": [
+            "M2351_NS"
+        ],
+        "device_has_remove": [],
+        "extra_labels_add": ["PSA", "TFM"],
+        "macros_add": [
+            "MBED_TZ_DEFAULT_ACCESS=1",
+            "CMSIS_NVIC_VIRTUAL",
+            "MBEDTLS_PSA_CRYPTO_C"
+        ],
+        "components_add": ["NSPE", "PSA_SRV_IPC"],
+        "components_remove": [],
+        "mbed_rom_start"        : "0x10040000",
+        "mbed_rom_size"         : "0x40000",
+        "mbed_ram_start"        : "0x30008000",
+        "mbed_ram_size"         : "0x10000"
+    },
+    "NUMAKER_PFM_M2351_S": {
+        "inherits": ["NUMAKER_PFM_M2351_CM"],
+        "core": "Cortex-M23",
+        "extra_labels_add": [
+            "M2351_S"
+        ],
+        "device_has_remove": ["TRNG"],
+        "extra_labels_add": ["PSA", "TFM"],
+        "macros_add": [
+            "BYPASS_NVSTORE_CHECK",
+            "DAUTH_CHIP_DEFAULT",
+            "MBEDTLS_PSA_CRYPTO_C",
+            "MBEDTLS_PSA_CRYPTO_SPM",
+            "MBEDTLS_ENTROPY_NV_SEED"
+        ],
+        "components_add": ["FLASHIAP", "SPE", "PSA_SRV_IMPL", "PSA_SRV_IPC"],
+        "components_remove": [],
+        "mbed_rom_start"        : "0x0",
+        "mbed_rom_size"         : "0x40000",
+        "mbed_ram_start"        : "0x20000000",
+        "mbed_ram_size"         : "0x8000"
     },
     "TMPM3H6": {
         "inherits": ["Target"],
