@@ -16,18 +16,16 @@
  * limitations under the License.
  */
 
-#ifndef MBED_CMSIS_NVIC_H
-#define MBED_CMSIS_NVIC_H
+#ifndef __TFM_PERIPHERALS_DEF_H__
+#define __TFM_PERIPHERALS_DEF_H__
 
-#define NVIC_NUM_VECTORS           (16 + 102)
+/* TODO */
+#if 0
+struct tfm_spm_partition_platform_data_t;
 
-#if defined(__CC_ARM) || (defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050))
-#   define NVIC_RAM_VECTOR_ADDRESS  ((uint32_t) &Image$$ER_IRAMVEC$$ZI$$Base)
-#elif defined(__ICCARM__)
-#   pragma section = "IRAMVEC"
-#   define NVIC_RAM_VECTOR_ADDRESS  ((uint32_t) __section_begin("IRAMVEC"))
-#elif defined(__GNUC__)
-#   define NVIC_RAM_VECTOR_ADDRESS  ((uint32_t) &__start_vector_table__)
+extern struct tfm_spm_partition_platform_data_t tfm_peripheral_std_uart;
+
+#define TFM_PERIPHERAL_STD_UART     (&tfm_peripheral_std_uart)
 #endif
 
-#endif
+#endif /* __TFM_PERIPHERALS_DEF_H__ */
