@@ -39,36 +39,78 @@
  */
 #if defined(DOMAIN_NS) && DOMAIN_NS
 
-/* Default non-secure ROM layout */
+/* Resolve non-secure ROM start */
 #ifndef MBED_ROM_START
+#ifdef PSA_NON_SECURE_ROM_START
+#define MBED_ROM_START          (PSA_NON_SECURE_ROM_START)
+#else
 #define MBED_ROM_START          (0x10040000)
 #endif
+#endif
+
+/* Resolve non-secure ROM size */
 #ifndef MBED_ROM_SIZE
+#ifdef PSA_NON_SECURE_ROM_SIZE
+#define MBED_ROM_SIZE           (PSA_NON_SECURE_ROM_SIZE)
+#else
 #define MBED_ROM_SIZE           (0x40000)
 #endif
-/* Default non-secure RAM layout */
+#endif
+
+/* Resolve non-secure RAM start */
 #ifndef MBED_RAM_START
+#ifdef PSA_NON_SECURE_RAM_START
+#define MBED_RAM_START          (PSA_NON_SECURE_RAM_START)
+#else
 #define MBED_RAM_START          (0x30008000)
 #endif
+#endif
+
+/* Resolve non-secure RAM size */
 #ifndef MBED_RAM_SIZE
+#ifdef PSA_NON_SECURE_RAM_SIZE
+#define MBED_RAM_SIZE           (PSA_NON_SECURE_RAM_SIZE)
+#else
 #define MBED_RAM_SIZE           (0x10000)
+#endif
 #endif
 
 #else
 
-/* Default secure ROM layout */
+/* Resolve secure ROM start */
 #ifndef MBED_ROM_START
+#ifdef PSA_SECURE_ROM_START
+#define MBED_ROM_START          (PSA_SECURE_ROM_START)
+#else
 #define MBED_ROM_START          (0x0)
 #endif
+#endif
+
+/* Resolve secure ROM size */
 #ifndef MBED_ROM_SIZE
+#ifdef PSA_SECURE_ROM_SIZE
+#define MBED_ROM_SIZE           (PSA_SECURE_ROM_SIZE)
+#else
 #define MBED_ROM_SIZE           (0x40000)
 #endif
-/* Default secure RAM layout */
+#endif
+
+/* Resolve secure RAM start */
 #ifndef MBED_RAM_START
+#ifdef PSA_SECURE_RAM_START
+#define MBED_RAM_START          (PSA_SECURE_RAM_START)
+#else
 #define MBED_RAM_START          (0x20000000)
 #endif
+#endif
+
+/* Resolve secure RAM size */
 #ifndef MBED_RAM_SIZE
+#ifdef PSA_SECURE_RAM_SIZE
+#define MBED_RAM_SIZE           (PSA_SECURE_RAM_SIZE)
+#else
 #define MBED_RAM_SIZE           (0x8000)
+#endif
 #endif
 
 #endif
