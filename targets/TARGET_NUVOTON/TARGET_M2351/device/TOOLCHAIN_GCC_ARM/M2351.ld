@@ -22,10 +22,6 @@
 
 #include "../partition_M2351_mem.h"
 
-#ifndef NU_TZ_NSC_SIZE
-#define NU_TZ_NSC_SIZE          (0x1000)
-#endif
-
 #if defined(DOMAIN_NS) && DOMAIN_NS
 
 #ifndef MBED_APP_START
@@ -84,17 +80,6 @@ __psp_stack_size__ = 0x00000800;
 
 #endif
 
-/* Requirements for NSC location
- *
- * 1. By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000.
- * 2. Greentea flash IAP uses last 4 sectors for its test. Avoid this range.
- * 3. Greentea NVSTORE uses last 2 sectors or 4KiB x 2 for its test. Avoid this range.
- * 4. NSC region size defaults to 4KiB if not defined.
- */
-#ifndef NU_TZ_NSC_START
-#define NU_TZ_NSC_START         (MBED_APP_START + MBED_APP_SIZE - 0x2000 - NU_TZ_NSC_SIZE)
-#endif
-
 
 #if defined(DOMAIN_NS) && DOMAIN_NS
 
@@ -110,8 +95,7 @@ MEMORY
 MEMORY
 {
   VECTORS (rx)          : ORIGIN = MBED_APP_START,          LENGTH = 0x00000400
-  FLASH (rx)            : ORIGIN = MBED_APP_START + 0x400,  LENGTH = NU_TZ_NSC_START - MBED_APP_START - 0x400
-  NSC_FLASH (rx)        : ORIGIN = NU_TZ_NSC_START,         LENGTH = NU_TZ_NSC_SIZE
+  FLASH (rx)            : ORIGIN = MBED_APP_START + 0x400,  LENGTH = MBED_APP_SIZE - 0x400
   RAM_INTERN (rwx)      : ORIGIN = MBED_RAM_APP_START,      LENGTH = MBED_RAM_APP_SIZE
 }
 
@@ -311,15 +295,29 @@ SECTIONS
     /* Veneer$$CMSE : */
     .gnu.sgstubs :
     {
-       __sgstubs_start = .;
+        . = ALIGN(32);
+
+        __sgstubs_start = .;
         *(.gnu.sgstubs.*)
-       __sgstubs_end = .;    
-    } > NSC_FLASH
+        __sgstubs_end = .;
 
-    Load$$LR$$LR_IROM_NSC$$Base = NU_TZ_NSC_START;
-    Load$$LR$$LR_IROM_NSC$$Length = NU_TZ_NSC_SIZE;
+        . = ALIGN(32);
+    } > FLASH
 
-    /* By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000. */
+    /* NOTE: __sgstubs_end is not updated with *(.gnu.sgstubs.*). __sgstubs_start and
+     *       __sgstubs_end are the same. GCC bug? */
+    Image$$ER_IROM_NSC$$Base = ADDR(.gnu.sgstubs);
+    Image$$ER_IROM_NSC_PAD$$Limit = ADDR(.gnu.sgstubs) + SIZEOF(.gnu.sgstubs);
+
+    /* Requirements for NSC location
+     *
+     * 1. Requested by SAU, NSC region must start at 32 byte-aligned boundary.
+     * 2. By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000.
+     * 3. Greentea flash IAP uses last 2 sectors for its test. Avoid this range.
+     * 4. Greentea NVSTORE uses last 2 sectors or 4 KiB x 2 for its test. Avoid this range.
+     * 5. KVStore uses last a few KiB. Avoid this range.
+     */
+    ASSERT(((__sgstubs_start % 32) == 0), "Requested by SAU, NSC region must start at 32 byte-aligned boundary.")
     ASSERT(__sgstubs_start >= 0x4000, "By IDAU, 0~0x4000 is secure. NSC can only locate in 0x4000~0x10000000.")
 #endif
 
@@ -392,7 +390,12 @@ SECTIONS
 
     .TFM_DATA :
     {
+        PROVIDE( __etext = LOADADDR(.TFM_DATA) );
+
         . = ALIGN(4);
+
+        __data_start__ = .;
+
         *(.data*)
 
         . = ALIGN(4);
@@ -417,6 +420,8 @@ SECTIONS
 
         KEEP(*(.jcr*))
         . = ALIGN(4);
+
+        __data_end__ = .;
 
     } > RAM_INTERN AT>FLASH
     Image$$ER_TFM_DATA$$RW$$Base = ADDR(.TFM_DATA);

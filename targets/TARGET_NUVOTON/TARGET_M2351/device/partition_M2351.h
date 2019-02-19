@@ -29,10 +29,26 @@ extern "C"
 #define NU_TZ_SECURE_FLASH_SIZE     NU_ROM_SIZE_S
 #define NU_TZ_SECURE_SRAM_SIZE      NU_RAM_SIZE_S
 
-extern int Load$$LR$$LR_IROM_NSC$$Base;
-extern int Load$$LR$$LR_IROM_NSC$$Length;
-#define NU_TZ_NSC_REGION_START  ((uint32_t) &Load$$LR$$LR_IROM_NSC$$Base)
-#define NU_TZ_NSC_REGION_SIZE   ((uint32_t) &Load$$LR$$LR_IROM_NSC$$Length)
+#if defined(__CC_ARM) || (defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050))
+
+extern int Image$$ER_IROM_NSC$$Base;
+extern int Image$$ER_IROM_NSC_PAD$$Limit;
+#define NU_TZ_NSC_REGION_START  ((uint32_t) &Image$$ER_IROM_NSC$$Base)
+#define NU_TZ_NSC_REGION_SIZE   (((uint32_t) &Image$$ER_IROM_NSC_PAD$$Limit) - ((uint32_t) &Image$$ER_IROM_NSC$$Base))
+
+#elif defined(__ICCARM__)
+
+#error("NSC region symbols not defined with IAR toolchain")
+
+#elif defined(__GNUC__)
+
+extern int Image$$ER_IROM_NSC$$Base;
+extern int Image$$ER_IROM_NSC_PAD$$Limit;
+#define NU_TZ_NSC_REGION_START  ((uint32_t) &Image$$ER_IROM_NSC$$Base)
+#define NU_TZ_NSC_REGION_SIZE   (((uint32_t) &Image$$ER_IROM_NSC_PAD$$Limit) - ((uint32_t) &Image$$ER_IROM_NSC$$Base))
+
+#endif
+
 
 /*
 //-------- <<< Use Configuration Wizard in Context Menu >>> -----------------
