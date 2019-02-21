@@ -222,4 +222,9 @@ ScatterAssert(ImageBase(ER_IROM_NSC) >= 0x4000)
 /* Heap must be allocated in RAM. */
 ScatterAssert(ImageLimit(ARM_LIB_HEAP) <= (MBED_RAM_APP_START + MBED_RAM_APP_SIZE))
 
+/* Application ROM code cannot overlap with flash IAP storage area. */
+#if NU_FLASHIAP_STORAGE_START
+ScatterAssert(LoadLimit(LR_IROM1) <= NU_FLASHIAP_STORAGE_START)
+#endif
+
 #endif

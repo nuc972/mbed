@@ -24,6 +24,16 @@
 #include "tfm_secure_api.h"
 #endif
 
+#include "platform/mbed_assert.h"
+
+/* The configuration of flash IAP storage area defined in "partition_M2351_mem.h"
+ * must match "tdb_internal/mbed_lib.json", so it can pass to linker files for
+ * memory layout check. */
+MBED_STATIC_ASSERT(NU_FLASHIAP_STORAGE_START == MBED_CONF_STORAGE_TDB_INTERNAL_INTERNAL_BASE_ADDRESS,
+    "NU_FLASHIAP_STORAGE_START MUST EQUAL TO MBED_CONF_STORAGE_TDB_INTERNAL_INTERNAL_BASE_ADDRESS");
+MBED_STATIC_ASSERT(NU_FLASHIAP_STORAGE_SIZE == MBED_CONF_STORAGE_TDB_INTERNAL_INTERNAL_SIZE,
+    "NU_FLASHIAP_STORAGE_SIZE MUST EQUAL TO MBED_CONF_STORAGE_TDB_INTERNAL_INTERNAL_SIZE");
+
 void FMC_NSBA_Setup(void)
 {
     /* Skip NSBA Setupt according config */

@@ -427,6 +427,11 @@ SECTIONS
     Image$$ER_TFM_DATA$$RW$$Base = ADDR(.TFM_DATA);
     Image$$ER_TFM_DATA$$RW$$Limit = ADDR(.TFM_DATA) + SIZEOF(.TFM_DATA);
 
+    /* Application ROM code cannot overlap with flash IAP storage area. */
+#if NU_FLASHIAP_STORAGE_START
+    ASSERT((LOADADDR(.TFM_DATA) + SIZEOF(.TFM_DATA)) <= NU_FLASHIAP_STORAGE_START, "Application ROM code cannot overlap with flash IAP storage area.")
+#endif
+
     .TFM_BSS (NOLOAD) :
     {
         . = ALIGN(4);

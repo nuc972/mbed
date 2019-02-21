@@ -134,3 +134,5 @@ place at start of IRAM_region   { block CSTACK };
 place in IRAM_region   { block IRAMVEC };
 place in IRAM_region   { readwrite };
 place in IRAM_region   { block HEAP };
+
+/* TODO: Check if flash IAP storage area overlaps with application ROM code */

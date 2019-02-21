@@ -30,6 +30,10 @@
        "ARM_MUSCA_A1_S": {
             "internal_size": "0x8000",
             "internal_base_address": "0x00420000"
+        },
+        "NUMAKER_PFM_M2351_S": {
+            "internal_size": "0x8000",
+            "internal_base_address": "(PSA_SECURE_ROM_START + PSA_SECURE_ROM_SIZE - MBED_CONF_STORAGE_TDB_INTERNAL_INTERNAL_SIZE)"
         }
     }
 }

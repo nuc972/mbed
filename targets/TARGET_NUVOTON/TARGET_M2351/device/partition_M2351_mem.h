@@ -150,4 +150,26 @@
 
 #endif
 
+/* Configuration of flash IAP storage area (for intermediate)
+ *
+ * 1. Must match "tdb_internal/mbed_lib.json"
+ * 2. Can pass to linker files for memory layout check
+ *
+ * With this approach, we can pass this configuration from "tdb_internal/mbed_lib.json"
+ * to linker file for detecting memory layout error before run-time.
+ */
+#if !defined(DOMAIN_NS) || (DOMAIN_NS == 0)
+
+#if TFM_LVL == 0
+/* Flash IAP storage area defaults to free flash space after application ROM code. */
+#define NU_FLASHIAP_STORAGE_START   0
+#define NU_FLASHIAP_STORAGE_SIZE    0
+#else
+/* Flash IAP storage area defaults to 32KiB at end of flash. */
+#define NU_FLASHIAP_STORAGE_START  (NU_ROM_START_S + NU_ROM_SIZE_S - NU_FLASHIAP_STORAGE_SIZE)
+#define NU_FLASHIAP_STORAGE_SIZE    0x8000
+#endif
+
+#endif
+
 #endif  /* __PARTITION_M2351_MEM_H__ */
