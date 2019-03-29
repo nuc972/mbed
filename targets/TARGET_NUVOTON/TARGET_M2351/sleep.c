@@ -38,9 +38,7 @@ void hal_sleep(void)
     CLK_Idle();
     SYS_LockReg();
 #else
-    SYS_UnlockReg_S();
-    CLK_Idle_S();
-    SYS_LockReg_S();
+    nu_idle_s();
 #endif
 }
 
@@ -60,9 +58,7 @@ void hal_deepsleep(void)
     CLK_PowerDown();
     SYS_LockReg();
 #else
-    SYS_UnlockReg_S();
-    CLK_PowerDown_S();
-    SYS_LockReg_S();
+    nu_powerdown_s();
 #endif
 }
 

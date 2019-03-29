@@ -30,8 +30,14 @@ extern "C" {
  * Its synopsis is the same as normal version except change of return/argument type for
  * binary-compatible across compilers.
  */
+#if defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U) && (TFM_LVL == 0)
 __NONSECURE_ENTRY
+#endif
 void pin_function_s(int32_t pin, int32_t data);
+#if (TFM_LVL > 0)
+__NONSECURE_ENTRY
+int32_t pin_function_veneer(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint32_t arg3);
+#endif
 
 #ifdef __cplusplus
 }
