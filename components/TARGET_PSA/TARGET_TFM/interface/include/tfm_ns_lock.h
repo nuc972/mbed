@@ -12,6 +12,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef int32_t (*veneer_fn) (uint32_t arg0, uint32_t arg1,
                       uint32_t arg2, uint32_t arg3);
@@ -33,6 +34,14 @@ uint32_t tfm_ns_lock_dispatch(veneer_fn fn,
  *          to initialize the TFM NS lock object
  */
 uint32_t tfm_ns_lock_init();
+
+/**
+ * \brief NS world, Is NS lock initialized?
+ *
+ * \details To be called by the wrapper API interface to check if
+ *          TFM NS lock object has initialized.
+ */
+bool tfm_ns_lock_get_init_state();
 
 #ifdef __cplusplus
 }
