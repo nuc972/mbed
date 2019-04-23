@@ -11,6 +11,8 @@
 #include "cmsis_os2.h"
 #include "tfm_api.h"
 #include "tfm_ns_lock.h"
+#include "mbed_critical.h"
+#include "mbed_error.h"
 
 /**
  * \brief struct ns_lock_state type
@@ -19,6 +21,7 @@ struct ns_lock_state
 {
     bool        init;
     osMutexId_t id;
+    uint16_t    lock_count;
 };
 
 /**
@@ -54,11 +57,17 @@ uint32_t tfm_ns_lock_dispatch(veneer_fn fn,
     }
 
     /* TFM request protected by NS lock */
+    if (core_util_atomic_incr_u16(&ns_lock.lock_count, 1) == 0) {
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_UNKNOWN, MBED_ERROR_CODE_OVERFLOW), "NS lock count overflow (> 0xFFFF)", ns_lock.lock_count);
+    }
     osMutexAcquire(ns_lock.id,osWaitForever);
 
     result = fn(arg0, arg1, arg2, arg3);
 
     osMutexRelease(ns_lock.id);
+    if (core_util_atomic_decr_u16(&ns_lock.lock_count, 1) == 0xFFFF) {
+        MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_UNKNOWN, MBED_ERROR_CODE_UNDERFLOW), "NS lock count underflow (< 0)", ns_lock.lock_count);
+    }
 
     return result;
 }
@@ -70,6 +79,7 @@ uint32_t tfm_ns_lock_init()
 {
     if (ns_lock.init == false) {
         ns_lock.id = osMutexNew(&ns_lock_attrib);
+        ns_lock.lock_count = 0;
         ns_lock.init = true;
         return TFM_SUCCESS;
     }
@@ -83,3 +93,7 @@ bool tfm_ns_lock_get_init_state()
     return ns_lock.init;
 }
 
+bool tfm_ns_lock_get_lock_state()
+{
+    return ns_lock.lock_count;
+}

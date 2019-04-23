@@ -43,6 +43,14 @@ uint32_t tfm_ns_lock_init();
  */
 bool tfm_ns_lock_get_init_state();
 
+/**
+ * \brief NS world, Is NS lock locked?
+ *
+ * \details To be called by the wrapper API interface to check if
+ *          TFM NS lock object has locked.
+ */
+bool tfm_ns_lock_get_lock_state();
+
 #ifdef __cplusplus
 }
 #endif
