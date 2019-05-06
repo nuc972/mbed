@@ -193,6 +193,18 @@
             "crash-capture-enabled": true,
             "fatal-error-auto-reboot-enabled": true
         },
+        "NUMAKER_PFM_M2351_NS": {
+            "stdio-baud-rate": 115200
+        },
+        "NUMAKER_PFM_M2351_S": {
+            "stdio-baud-rate": 115200
+        },
+        "NUMAKER_PFM_M2351_NOPSA_NS": {
+            "stdio-baud-rate": 115200
+        },
+        "NUMAKER_PFM_M2351_NOPSA_S": {
+            "stdio-baud-rate": 115200
+        },
         "NRF52840_DK": {
             "crash-capture-enabled": true,
             "fatal-error-auto-reboot-enabled": true
