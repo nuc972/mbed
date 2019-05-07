@@ -55,6 +55,10 @@ void CLK_EnableModuleClock_S(uint32_t u32ModuleIndex);
 __NONSECURE_ENTRY
 void CLK_DisableModuleClock_S(uint32_t u32ModuleIndex);
 
+/* Is RTC clock enabled? */
+__NONSECURE_ENTRY
+int32_t CLK_IsRTCClockEnabled_S(void);
+
 /* Secure SYS_LockReg
  *
  * Guard access to secure module from non-secure domain before SYS_LockReg.

@@ -137,7 +137,7 @@ extern int Image$$ER_IROM_NSC$$Base;
 //   <o.27>  BPWM1      <0=> Secure <1=> Non-Secure
 //   </h>
 */
-#define SCU_INIT_PNSSET2_VAL      0xFFFFFFFD
+#define SCU_INIT_PNSSET2_VAL      0xFFFFFFFF
 /*
     PNSSET3
 */
@@ -553,7 +553,7 @@ extern int Image$$ER_IROM_NSC$$Base;
 //   </h>
 //
 */
-#define NVIC_INIT_ITNS0_VAL      0xFFFFFFBF
+#define NVIC_INIT_ITNS0_VAL      0xFFFFFFFF
 
 /*
     Initialize ITNS 1 (Interrupts 0..31)

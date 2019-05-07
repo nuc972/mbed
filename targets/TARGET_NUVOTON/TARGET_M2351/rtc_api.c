@@ -28,38 +28,11 @@
 
 /* NOTE: BSP RTC driver judges secure/non-secure RTC by PC. This implementation cannot support non-secure RTC
  *       controlled by secure executable. A better way would be that secure/non-secure RTC base is passed
- *       to RTC API as an argument like most other APIs. With BSP RTC driver unchanged, we must enforce 
- *       secure RTC. */
-#if defined(SCU_INIT_PNSSET2_VAL) && (SCU_INIT_PNSSET2_VAL & (1 << 1))
-#error("Limited by BSP/RTC, we can only support secure RTC.")
+ *       to RTC API as an argument like most other APIs. With BSP RTC driver unchanged, we support neither 
+ *       secure RTC nor non-secure RTC accessible by secure world. */
+#if defined(SCU_INIT_PNSSET2_VAL) && !(SCU_INIT_PNSSET2_VAL & (1 << 1))
+#error("Limited by BSP/RTC, we doesn't support secure RTC.")
 #endif
-
-void rtc_init(void)
-{
-    rtc_init_s();
-}
-
-void rtc_free(void)
-{
-    rtc_free_s();
-}
-
-int rtc_isenabled(void)
-{
-    return rtc_isenabled_s();
-}
-
-time_t rtc_read(void)
-{
-    return rtc_read_s();
-}
-
-void rtc_write(time_t t)
-{
-    rtc_write_s(t);
-}
-
-#if defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3U)
 
 /* Micro seconds per second */
 #define NU_US_PER_SEC               1000000
@@ -67,7 +40,7 @@ void rtc_write(time_t t)
  *
  * NOTE: This dependents on real hardware.
  */
-#define NU_RTCCLK_PER_SEC           ((CLK->CLKSEL3 & CLK_CLKSEL3_SC0SEL_Msk) ? __LIRC : __LXT)
+#define NU_RTCCLK_PER_SEC           ((rtc_modinit.clksrc == CLK_CLKSEL3_RTCSEL_LXT) ? __LXT : __LIRC)
 
 /* Strategy for implementation of RTC HAL
  *
@@ -121,10 +94,9 @@ static time_t t_write = 0;
 /* Convert date time from H/W RTC to struct TM */
 static void rtc_convert_datetime_hwrtc_to_tm(struct tm *datetime_tm, const S_RTC_TIME_DATA_T *datetime_hwrtc);
 
-static const struct nu_modinit_s rtc_modinit = {RTC_0, RTC_MODULE, 0, 0, 0, RTC_IRQn, NULL};
+static const struct nu_modinit_s rtc_modinit = {RTC_0, RTC_MODULE, CLK_CLKSEL3_RTCSEL_LXT, 0, 0, RTC_IRQn, NULL};
 
-__NONSECURE_ENTRY
-void rtc_init_s(void)
+void rtc_init(void)
 {
     if (rtc_isenabled()) {
         return;
@@ -136,17 +108,15 @@ void rtc_init_s(void)
     rtc_write(0);
 }
 
-__NONSECURE_ENTRY
-void rtc_free_s(void)
+void rtc_free(void)
 {
     CLK_DisableModuleClock_S(rtc_modinit.clkidx);
 }
 
-__NONSECURE_ENTRY
-int32_t rtc_isenabled_s(void)
+int rtc_isenabled(void)
 {
     // NOTE: To access (RTC) registers, clock must be enabled first.
-    if (! (CLK->APBCLK0 & CLK_APBCLK0_RTCCKEN_Msk)) {
+    if (! CLK_IsRTCClockEnabled_S()) {
         // Enable IP clock
         CLK_EnableModuleClock_S(rtc_modinit.clkidx);
     }
@@ -157,8 +127,7 @@ int32_t rtc_isenabled_s(void)
     return !! (rtc_base->INIT & RTC_INIT_ACTIVE_Msk);
 }
 
-__NONSECURE_ENTRY
-int64_t rtc_read_s(void)
+time_t rtc_read(void)
 {
     /* NOTE: After boot, RTC time registers are not synced immediately, about 1 sec latency.
      *       RTC time got (through RTC_GetDateAndTime()) in this sec would be last-synced and incorrect.
@@ -206,8 +175,7 @@ int64_t rtc_read_s(void)
     return t_present;
 }
 
-__NONSECURE_ENTRY
-void rtc_write_s(int64_t t)
+void rtc_write(time_t t)
 {
     if (! rtc_isenabled()) {
         rtc_init();
@@ -254,5 +222,4 @@ static void rtc_convert_datetime_hwrtc_to_tm(struct tm *datetime_tm, const S_RTC
     datetime_tm->tm_sec  = datetime_hwrtc->u32Second;
 }
 
-#endif
 #endif

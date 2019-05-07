@@ -8189,7 +8189,7 @@
         "extra_labels_add": [
             "M23_S"
         ],
-        "device_has_remove": ["TRNG", "SERIAL", "SERIAL_ASYNCH", "SERIAL_FC", "STDIO_MESSAGES"],
+        "device_has_remove": ["TRNG", "SERIAL", "SERIAL_ASYNCH", "SERIAL_FC", "STDIO_MESSAGES", "RTC"],
         "components_add": ["FLASHIAP"],
         "components_remove": [],
         "mbed_rom_start"        : "0x0",
@@ -8224,7 +8224,7 @@
         "inherits": ["SPE_Target", "NUMAKER_PFM_M2351_CM"],
         "core": "Cortex-M23",
         "extra_labels_add": ["M23_S", "PSA", "TFM"],
-        "device_has_remove": ["TRNG", "SERIAL", "SERIAL_ASYNCH", "SERIAL_FC", "STDIO_MESSAGES"],
+        "device_has_remove": ["TRNG", "SERIAL", "SERIAL_ASYNCH", "SERIAL_FC", "STDIO_MESSAGES", "RTC"],
         "macros_add": [
             "DAUTH_CHIP_DEFAULT",
             "MBEDTLS_PSA_CRYPTO_C",

@@ -182,6 +182,12 @@ void CLK_DisableModuleClock_S(uint32_t u32ModuleIndex)
 }
 
 __NONSECURE_ENTRY
+int32_t CLK_IsRTCClockEnabled_S(void)
+{
+    return !!(CLK->APBCLK0 & CLK_APBCLK0_RTCCKEN_Msk);
+}
+
+__NONSECURE_ENTRY
 void SYS_LockReg_S(void)
 {
     /* Allow non-secure domain to lock/unlock locked registers without check.
