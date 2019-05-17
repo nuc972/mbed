@@ -87,3 +87,17 @@ bool tfm_ns_lock_get_init_state()
     return ns_lock.init;
 }
 
+bool tfm_ns_lock_get_lock_state()
+{
+    if (ns_lock.init) {
+        /* osRtxMutexId() is defined in rtx_lib.h. Inclusion of rtx_lib.h needs to
+         * include extra header file like RTE_Components.h. To avoid inclusion error
+         * or inclusion of more irrelevant header files, we expand osRtxMutexId()
+         * in-place to get mutex lock count straight. */
+        //os_mutex_t *mutex = osRtxMutexId(ns_lock.id);
+        osRtxMutex_t *mutex = (osRtxMutex_t *) ns_lock.id;
+        return (mutex->lock != 0U);
+    } else {
+        return false;
+    }
+}
